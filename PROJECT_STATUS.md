@@ -29,42 +29,60 @@ filtering, it is not the Phase 2 engine).
 
 ## Currently Working On
 
-Nothing mid-flight. The project-management system (this file, `CLAUDE.md`,
-`ARCHITECTURE.md`, `CHANGELOG.md`, Git init) was just established. No application code
-changed during that setup.
+Nothing mid-flight on the statusMap fix — it's complete and tested (see below). One item is
+intentionally left open and untouched: `src/popup/popup.ts` and `src/util/exclusiveTask.ts`
+already contain sync-lock/lifecycle scaffolding (`createExclusiveRunner`, `AlreadyRunningError`,
+button-disable-while-busy) that was drafted alongside the statusMap fix in an earlier pass.
+Per explicit instruction, that lifecycle work was left as-is (not removed — it's harmless and
+already wired up) but was **not** extended, tested, or verified in this session. It has no
+test coverage yet. Treat it as a distinct, separately-trackable follow-up, not part of the
+statusMap fix below.
 
 ## Completed Recently
 
-- Phase 1 implementation: types, Codeforces API client with throttling/retry, normalization,
-  SOLVED/ATTEMPTED/UNATTEMPTED classification, `chrome.storage.local`-backed caching with
-  TTLs and incremental submission sync, MV3 manifest, background service worker, debug
-  popup, 21-test zero-dependency test suite (all passing), README.
-- Git repository initialized; Phase 1 committed as the baseline checkpoint
-  (`33536a0 feat: Phase 1 — Codeforces data layer ...`).
-- Project-management docs created (this file + `CLAUDE.md` + `ARCHITECTURE.md` +
-  `CHANGELOG.md`).
+- **Fixed a real Phase 1 bug**: `StatusMap` (a `Map`) was being returned as-is through
+  `chrome.runtime.sendMessage`'s response. Chrome's extension messaging API serializes
+  messages as JSON by default (not structured clone), which collapses any `Map` into `{}`.
+  The popup's `statusMap.get(...)` then failed with `TypeError: f.get is not a function`.
+  Root cause, trace, and fix are documented in `src/messaging/protocol.ts`.
+  - Fix: `serializeStatusMap`/`deserializeStatusMap` in a new, documented message-boundary
+    module (`src/messaging/protocol.ts`), used by `service-worker.ts` (serialize before
+    `sendResponse`) and `popup.ts` (deserialize after receiving). `classify.ts` and the
+    internal `StatusMap` type were **not** changed — `Map` is still used internally.
+  - Verified every other `Map`/`Set` usage in the codebase (`normalize.ts`,
+    `syncService.ts`'s `mergeSubmissions`) is fully local and never crosses a
+    storage/messaging boundary. `chrome.storage.local` never persists a `StatusMap` (already
+    true before this fix — see "Important Decisions" below).
+  - Added `src/test/protocol.test.ts` (3 tests): serialization produces a plain array,
+    survives a real `JSON.stringify`/`JSON.parse` round-trip with `.get()` still working
+    afterward, and a regression test reproducing the original bug directly
+    (`JSON.parse(JSON.stringify(new Map()))` → `{}`).
+  - `npm run typecheck`: pass. `npm test`: 24/24 pass (was 21; +3 new). `npm run build`:
+    still fails in this sandbox for the pre-existing, unrelated reason (no network access to
+    install `vite`/`@crxjs/vite-plugin` — see "Known Issues", unchanged by this fix).
+
+- Phase 1 implementation, project-management docs, and Git init (see earlier entries below /
+  in `CHANGELOG.md`).
 
 ## Known Issues
 
-- **The real Vite/CRXJS build has never been run.** The sandbox this project is developed in
-  has no network access, so `npm install` cannot reach the npm registry, and therefore
-  `npm run build` has never actually been executed or verified — confirmed by re-running it
-  during this audit (`sh: 1: vite: not found`, no `node_modules`, no `dist/`). Everything
-  that *can* be checked without external packages (`tsc --noEmit`, the test suite) passes,
-  but the extension has not been loaded into an actual Chrome instance. **This should be the
-  very first thing verified once development resumes on a machine with normal npm/network
+- **The real Vite/CRXJS build has never been run.** Same as before this session — no network
+  access in this sandbox to `npm install`. Re-confirmed again after this fix
+  (`sh: 1: vite: not found`, no `node_modules`, no `dist/`). Not caused by or related to the
+  statusMap fix. **First thing to verify once development continues with normal network
   access.**
-- No `@types/chrome` — three files (`chromeStorageAdapter.ts`, `service-worker.ts`,
-  `popup.ts`) declare `chrome` as `any` instead. Intentional (see `CLAUDE.md`/`README.md`
-  "Why no @types/chrome?"), not a defect, but worth knowing about.
+- **Untested sync-lock/lifecycle scaffolding already sits in `popup.ts`/`exclusiveTask.ts`**
+  (see "Currently Working On"). It's plausible-looking code (mutex-style guard, released in
+  a `finally`) but has zero test coverage and hasn't been through a dedicated review/fix
+  pass. Don't assume it's correct just because it's present — treat it the same as any other
+  unverified code per `CLAUDE.md`.
+- No `@types/chrome` — three files declare `chrome` as `any` instead. Intentional, not a
+  defect (see `README.md`/`ARCHITECTURE.md`).
 - CORS/direct-fetch-from-extension behavior against `codeforces.com/api` is inferred from
-  precedent (other CF browser extensions do this successfully), not personally verified end
-  to end, for the same no-network-access reason above.
-- Contest names aren't resolved (problems only carry `contestId`, not a human-readable name)
-  — deferred; not needed for classification/statistics.
-- No mechanism yet auto-detects a changed Codeforces handle and clears stale cache
-  (`clearHandleCache()` exists but nothing calls it) — earmarked for the Settings phase
-  (Phase 9).
+  precedent, not personally verified end to end, for the no-network-access reason above.
+- Contest names aren't resolved — deferred; not needed for classification/statistics.
+- No mechanism yet auto-detects a changed Codeforces handle and clears stale cache —
+  earmarked for the Settings phase (Phase 9).
 
 ## Tests
 
@@ -72,8 +90,7 @@ Run via `npm test` (= `npx tsx src/test/run.ts`), a zero-dependency custom harne
 (`src/test/testKit.ts`) — no test framework installed yet, intentionally, per
 `CLAUDE.md`'s "don't add dependencies unnecessarily."
 
-**Current result: 21/21 passing.** Re-verified during this audit session (not assumed from
-prior notes). Coverage:
+**Current result: 24/24 passing** (re-verified this session; was 21, +3 new). Coverage:
 
 - `classify.test.ts` (8 tests): SOLVED/ATTEMPTED/UNATTEMPTED classification, failed-attempt
   counting, duplicate-submission dedup, independent per-problem classification, null-verdict
@@ -86,6 +103,9 @@ prior notes). Coverage:
   range.
 - `api.test.ts` (5 tests): invalid-handle detection, rate-limit retry/backoff, pagination
   continuation and early-stop.
+- `protocol.test.ts` (3 tests, new): `StatusMap` serializes to a plain JSON-safe array (not
+  a `Map`); survives a real `JSON.stringify`/`JSON.parse` round-trip with `.get()` still
+  working afterward; a regression test reproducing the original bug directly.
 
 `npm run typecheck` (`tsc --noEmit`) also passes cleanly — re-verified during this audit.
 
@@ -114,41 +134,46 @@ deliberate:
 
 ## Next Task
 
-**Phase 2 — Core filtering + statistics engine.** Specifically: design and implement a
+**Verify/finish the sync-lock scaffolding already sitting in `popup.ts`/`exclusiveTask.ts`**
+as its own isolated task (it currently has zero test coverage and hasn't been reviewed).
+Only after that's resolved: **Phase 2 — Core filtering + statistics engine** — a
 `getProblems({ minRating?, maxRating?, exactRating?, status?, tags?, contestId? })`-style
-query function in a new `src/data/` (or `src/query/`) module, built on top of the existing
-`Problem[]` + `StatusMap` primitives from Phase 1 — plus rating-distribution and
-success-rate calculation functions. No dashboard UI yet (that's Phase 3). Write tests for
-edge cases (empty rating range, no matching tags, exact-rating vs range, status combinations)
-before considering it done, per `CLAUDE.md`'s development process.
-
-Do not start Phase 3 (dashboard) until Phase 2 is implemented, tested, and this file is
-updated to reflect it.
+query function built on the existing `Problem[]` + `StatusMap` primitives, plus
+rating-distribution and success-rate calculations. No dashboard UI yet (Phase 3). Write
+tests for edge cases before considering it done, per `CLAUDE.md`.
 
 ## Last Session Summary
 
-**This session's actual work:** No application code was changed. This was a project-audit +
-project-management-setup session, per explicit user request:
+**This session's actual work:** Fixed a real, user-reported Phase 1 bug — `StatusMap`
+losing its `Map` prototype across `chrome.runtime.sendMessage`. Scope was deliberately
+narrow per explicit instruction (statusMap fix only; no sync-lock work; no Phase 2):
 
-- Inspected the full existing project (file tree, `package.json`, `tsconfig.json`,
-  `vite.config.ts`, `manifest.json`, `src/test/testKit.ts` specifically, git status).
-- Re-ran `tsc --noEmit` and `npm test` to verify current state rather than trust prior notes
-  — both pass (0 typecheck errors, 21/21 tests).
-- Confirmed `npm run build` has never succeeded (no network access in this environment to
-  `npm install`; re-confirmed by attempting it — `vite: not found`).
-- Initialized Git (`main` branch), created the baseline commit for all of Phase 1's work.
-- Created `CLAUDE.md`, `PROJECT_STATUS.md` (this file), `ARCHITECTURE.md`, `CHANGELOG.md`.
-- Packaged and delivered a downloadable zip backup of the full project (including `.git`)
-  for the user to store outside this environment — see the chat response for the persistence
-  explanation and download link; this file doesn't restate it since it's environment status,
-  not project status.
+- Inspected pre-existing uncommitted changes from an earlier pass (`service-worker.ts`,
+  `popup.ts`, `src/messaging/protocol.ts`, `src/util/exclusiveTask.ts`,
+  `src/test/protocol.test.ts`) and confirmed the statusMap serialize/deserialize design was
+  already correctly implemented and did not need further changes.
+- Found and fixed the one gap: `src/test/run.ts` didn't import `protocol.test.ts` yet, so
+  those tests never actually ran.
+- Left the pre-existing, untouched sync-lock/lifecycle scaffolding
+  (`createExclusiveRunner`/`AlreadyRunningError` in `popup.ts`/`exclusiveTask.ts`) exactly as
+  found — not removed (per instruction not to discard existing changes), not extended or
+  tested (per instruction not to work on it this session).
+- Ran `npm run typecheck` (pass), `npm test` (24/24 pass, +3 new), `npm run build` (fails —
+  confirmed this is the same pre-existing "no network access to install vite" limitation,
+  unrelated to this fix).
+- Updated `PROJECT_STATUS.md` (this file) and `CHANGELOG.md`. Committed.
 
-**Files changed:** `CLAUDE.md` (new), `PROJECT_STATUS.md` (new), `ARCHITECTURE.md` (new),
-`CHANGELOG.md` (new). No source files under `src/` were touched.
+**Files changed:** `src/test/run.ts` (added one import). No other application files needed
+changes — `service-worker.ts`, `popup.ts`, `messaging/protocol.ts`, `util/exclusiveTask.ts`,
+`test/protocol.test.ts` were already correct from the earlier uncommitted pass and are now
+committed as-is.
 
-**Tests run:** `npm run typecheck` (pass), `npm test` (21/21 pass).
+**Tests run:** `npm run typecheck` (pass), `npm test` (24/24 pass), `npm run build`
+(fails — pre-existing, unrelated environment limitation).
 
-**Result:** Project confirmed stable and exactly at "Phase 1 complete." Git established.
+**Result:** statusMap Chrome-messaging bug fixed and regression-tested. Sync-lock
+scaffolding remains present but unverified/untested — flagged as a distinct next item, not
+silently treated as done.
 
-**Remaining work:** Everything in "Overall Progress" from Phase 2 onward. See "Next Task"
-above for the specific next step.
+**Remaining work:** Verify/test the sync-lock scaffolding as its own isolated task (not yet
+started); then Phase 2 (filtering + statistics engine) once that's resolved. See "Next Task."

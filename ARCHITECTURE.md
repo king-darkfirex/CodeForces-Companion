@@ -87,26 +87,53 @@ src/
                                newest-first. Exported specifically so it's unit-testable in
                                isolation from chrome.storage.
 
+  messaging/
+    protocol.ts               THE message-boundary contract between popup and background.
+                             Defines ExtensionRequest/ExtensionResponse and the JSON-safe
+                             response shapes (SyncProblemsetResponseData,
+                             SyncUserResponseData). Also home to serializeStatusMap /
+                             deserializeStatusMap: chrome.runtime.sendMessage serializes
+                             messages as JSON by default (not structured clone), which
+                             silently collapses a Map into {} — this module converts
+                             StatusMap to/from a JSON-safe array of [key, value] tuples so
+                             that can't happen again. See the file's doc comment and
+                             CHANGELOG.md for the bug this fixed.
+
+  util/
+    exclusiveTask.ts           createExclusiveRunner()/AlreadyRunningError — a generic,
+                             dependency-free mutual-exclusion helper used by popup.ts to
+                             guard against overlapping syncs. NOTE: present in the codebase
+                             but not yet test-covered or reviewed as its own task — see
+                             PROJECT_STATUS.md "Known Issues" before relying on it.
+
   background/
     service-worker.ts         MV3 background entry point. Listens for
                              {type: "SYNC_PROBLEMSET", force?} and
                              {type: "SYNC_USER", handle, force?} messages via
-                             chrome.runtime.onMessage, calls the matching syncService
-                             function, and responds {ok: true, data} or
-                             {ok: false, error: {name, message}}.
+                             chrome.runtime.onMessage (types from messaging/protocol.ts),
+                             calls the matching syncService function, serializes the
+                             StatusMap via serializeStatusMap before responding, and replies
+                             {ok: true, data} or {ok: false, error: {name, message}}.
 
   popup/                 DEBUG UI ONLY — not the real product UI (that's Phase 3+).
     popup.html               Handle input, Sync/Force-refresh buttons, a min/max rating query
                              box, and a <pre> output area.
     popup.ts                  Sends SYNC_PROBLEMSET / SYNC_USER messages to the background
-                             worker, then does a plain array filter+count over the results to
-                             print solved/attempted/unattempted counts and answer an ad hoc
-                             rating-range query.
+                             worker, calls deserializeStatusMap on the response to rebuild a
+                             real Map before any .get() call, then does a plain array
+                             filter+count to print solved/attempted/unattempted counts and
+                             answer an ad hoc rating-range query. Sync actions are wrapped in
+                             a try/catch and an exclusive-run guard (see the exclusiveTask.ts
+                             caveat above) so an unexpected error is shown in the popup
+                             instead of becoming a silent unhandled rejection.
 
   test/                 Zero-dependency test harness + all current tests.
     testKit.ts                ~50-line test()/assertEqual()/assertTrue()/run() harness. No
                              external test framework dependency.
-    classify.test.ts, normalize.test.ts, sync.test.ts, query-demo.test.ts, api.test.ts
+    classify.test.ts, normalize.test.ts, sync.test.ts, query-demo.test.ts, api.test.ts,
+    protocol.test.ts          (statusMap serialization: plain-array shape, a real
+                             JSON.stringify/JSON.parse round-trip with .get() verified
+                             afterward, and a direct regression test of the original bug)
     run.ts                    Imports every *.test.ts file (registering their tests as a
                              side effect) then calls run(). This is what `npm test` executes.
 ```

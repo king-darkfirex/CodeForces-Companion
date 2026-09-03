@@ -3,17 +3,34 @@
 declare const chrome: any;
 
 import { ensureProblemset, ensureUserData } from "../sync/syncService";
+import {
+  ExtensionRequest,
+  ExtensionResponse,
+  SyncProblemsetResponseData,
+  SyncUserResponseData,
+  serializeStatusMap,
+} from "../messaging/protocol";
 
-type Message =
-  | { type: "SYNC_PROBLEMSET"; force?: boolean }
-  | { type: "SYNC_USER"; handle: string; force?: boolean };
-
-async function handleMessage(message: Message) {
+async function handleMessage(
+  message: ExtensionRequest
+): Promise<SyncProblemsetResponseData | SyncUserResponseData> {
   switch (message.type) {
-    case "SYNC_PROBLEMSET":
+    case "SYNC_PROBLEMSET": {
+      // {problems, fromCache, syncedAt} is already JSON-safe as-is.
       return ensureProblemset({ force: message.force });
-    case "SYNC_USER":
-      return ensureUserData(message.handle, { force: message.force });
+    }
+    case "SYNC_USER": {
+      const result = await ensureUserData(message.handle, { force: message.force });
+      // `result.statusMap` is a real `Map` — see src/messaging/protocol.ts for
+      // why it must be converted before it can safely cross sendResponse().
+      return {
+        profile: result.profile,
+        submissions: result.submissions,
+        statusMap: serializeStatusMap(result.statusMap),
+        fromCache: result.fromCache,
+        syncedAt: result.syncedAt,
+      };
+    }
     default: {
       const exhaustiveCheck: never = message;
       throw new Error(`Unknown message type: ${JSON.stringify(exhaustiveCheck)}`);
@@ -22,7 +39,11 @@ async function handleMessage(message: Message) {
 }
 
 chrome.runtime.onMessage.addListener(
-  (message: Message, _sender: unknown, sendResponse: (response: unknown) => void) => {
+  (
+    message: ExtensionRequest,
+    _sender: unknown,
+    sendResponse: (response: ExtensionResponse<SyncProblemsetResponseData | SyncUserResponseData>) => void
+  ) => {
     handleMessage(message)
       .then((data) => sendResponse({ ok: true, data }))
       .catch((err: unknown) => {

@@ -111,11 +111,27 @@ async function syncAll(force: boolean): Promise<void> {
  *     it releases its lock in a `finally` regardless of success or
  *     failure — guarantees a later sync attempt is never permanently
  *     blocked by an earlier one crashing.
+ *
+ * `setBusy(true)`/`setBusy(false)` are deliberately called *inside* the
+ * task passed to `runExclusive`, not wrapped around the `runExclusive` call
+ * itself. If they wrapped the whole call, a second click that arrives while
+ * a sync is already running would hit `AlreadyRunningError` and its own
+ * `finally` would immediately call `setBusy(false)` — re-enabling the
+ * buttons while the *first* sync is still genuinely in progress. Scoping
+ * `setBusy` to only the call that actually acquires the lock means a
+ * rejected/overlapping attempt never touches the busy state that the
+ * in-flight sync owns.
  */
 async function handleSyncClick(force: boolean): Promise<void> {
-  setBusy(true);
   try {
-    await runExclusive(() => syncAll(force));
+    await runExclusive(async () => {
+      setBusy(true);
+      try {
+        await syncAll(force);
+      } finally {
+        setBusy(false);
+      }
+    });
   } catch (err) {
     if (err instanceof AlreadyRunningError) {
       print("A sync is already in progress — please wait for it to finish.");
@@ -123,8 +139,6 @@ async function handleSyncClick(force: boolean): Promise<void> {
       const e = err as { name?: string; message?: string };
       print(`Unexpected error during sync: [${e?.name ?? "Error"}] ${e?.message ?? String(err)}`);
     }
-  } finally {
-    setBusy(false);
   }
 }
 

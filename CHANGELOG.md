@@ -3,6 +3,45 @@
 Concise, chronological record of meaningful changes. Not every edit — only things worth a
 future session (or you) knowing happened.
 
+## Session: Verify + fix sync-lock/lifecycle behavior
+
+**Type:** Verification + targeted bug fix. Scope deliberately narrow per instruction (this
+task only — no Phase 2).
+
+- **Verified `createExclusiveRunner`'s core lock semantics were already correct** via 6 new
+  direct unit tests (`src/test/exclusiveTask.test.ts`, previously zero coverage): a run
+  starts normally; a concurrent second run is rejected with `AlreadyRunningError`; the lock
+  is released in a `finally` on success, on a thrown error, and on an async rejection; and
+  separate runner instances don't share a lock. No changes to `exclusiveTask.ts` were
+  needed — it was correct as written.
+- **Found and fixed one real bug** in `popup.ts`'s `handleSyncClick`: `setBusy(true)`/
+  `setBusy(false)` wrapped the entire `runExclusive(...)` call, so a rejected
+  (`AlreadyRunningError`) overlapping sync attempt's own `finally` block would call
+  `setBusy(false)` and re-enable the Sync/Refresh/Query buttons while the *first* sync was
+  still genuinely running. Fix: `setBusy(true)`/`setBusy(false)` moved inside the task
+  passed to `runExclusive`, so only the call that actually acquires the lock touches busy
+  state; a rejected overlapping call now only prints a message and leaves busy state alone.
+- Confirmed (already correct, unaffected by the above): `handleSyncClick`'s `try/catch`
+  around the whole `runExclusive` call means any unexpected exception from `syncAll` is
+  always caught and shown in the popup — it cannot get stuck showing "Syncing…" forever.
+- Noted but did not fix (out of scope for this task): `popup.ts`'s `sendMessage` doesn't
+  check `chrome.runtime.lastError`, so a closed message port with no response (an MV3
+  service-worker-termination edge case) surfaces as an uninformative generic `TypeError`
+  rather than a clear message. Still caught and displayed, just not worded well — tracked in
+  `PROJECT_STATUS.md` "Known Issues".
+
+**Files changed:** `src/popup/popup.ts` (the `handleSyncClick` fix), `src/test/exclusiveTask.test.ts`
+(new, 6 tests), `src/test/run.ts` (added one import). `src/util/exclusiveTask.ts` inspected,
+not modified.
+
+**Tests performed:** `npm run typecheck` (pass), `npm test` (30/30 pass, was 24). `npm run
+build` intentionally not attempted this session per instruction.
+
+**Result:** All 7 requested sync-lock/lifecycle guarantees verified; the one broken
+guarantee (accurate busy-state during an overlapping attempt) fixed and regression-tested.
+
+---
+
 ## Session: Fix — statusMap lost its Map prototype across chrome.runtime.sendMessage
 
 **Type:** Bug fix + regression tests. Scope deliberately narrow per instruction (this fix

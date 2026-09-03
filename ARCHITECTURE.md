@@ -102,9 +102,10 @@ src/
   util/
     exclusiveTask.ts           createExclusiveRunner()/AlreadyRunningError — a generic,
                              dependency-free mutual-exclusion helper used by popup.ts to
-                             guard against overlapping syncs. NOTE: present in the codebase
-                             but not yet test-covered or reviewed as its own task — see
-                             PROJECT_STATUS.md "Known Issues" before relying on it.
+                             guard against overlapping syncs. Verified via 6 direct unit
+                             tests (src/test/exclusiveTask.test.ts): normal start,
+                             concurrent-run rejection, lock release on success/thrown
+                             error/async rejection, and independent locks per instance.
 
   background/
     service-worker.ts         MV3 background entry point. Listens for
@@ -122,10 +123,15 @@ src/
                              worker, calls deserializeStatusMap on the response to rebuild a
                              real Map before any .get() call, then does a plain array
                              filter+count to print solved/attempted/unattempted counts and
-                             answer an ad hoc rating-range query. Sync actions are wrapped in
-                             a try/catch and an exclusive-run guard (see the exclusiveTask.ts
-                             caveat above) so an unexpected error is shown in the popup
-                             instead of becoming a silent unhandled rejection.
+                             answer an ad hoc rating-range query. handleSyncClick wraps each
+                             sync in runExclusive() (so only one sync runs at a time) and a
+                             try/catch (so an unexpected error is shown in the popup instead
+                             of becoming a silent unhandled rejection); setBusy(true/false)
+                             is scoped *inside* the task passed to runExclusive specifically
+                             so a rejected overlapping attempt never re-enables the buttons
+                             out from under a genuinely in-flight sync — see CHANGELOG.md for
+                             the bug this fixed. Known gap: sendMessage() doesn't check
+                             chrome.runtime.lastError (see PROJECT_STATUS.md).
 
   test/                 Zero-dependency test harness + all current tests.
     testKit.ts                ~50-line test()/assertEqual()/assertTrue()/run() harness. No
@@ -134,6 +140,8 @@ src/
     protocol.test.ts          (statusMap serialization: plain-array shape, a real
                              JSON.stringify/JSON.parse round-trip with .get() verified
                              afterward, and a direct regression test of the original bug)
+    exclusiveTask.test.ts     (sync-lock: normal run, concurrent-run rejection, lock release
+                             on success/thrown-error/async-rejection, independent instances)
     run.ts                    Imports every *.test.ts file (registering their tests as a
                              side effect) then calls run(). This is what `npm test` executes.
 ```

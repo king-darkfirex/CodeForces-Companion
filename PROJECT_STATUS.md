@@ -29,53 +29,48 @@ filtering, it is not the Phase 2 engine).
 
 ## Currently Working On
 
-Nothing mid-flight on the statusMap fix — it's complete and tested (see below). One item is
-intentionally left open and untouched: `src/popup/popup.ts` and `src/util/exclusiveTask.ts`
-already contain sync-lock/lifecycle scaffolding (`createExclusiveRunner`, `AlreadyRunningError`,
-button-disable-while-busy) that was drafted alongside the statusMap fix in an earlier pass.
-Per explicit instruction, that lifecycle work was left as-is (not removed — it's harmless and
-already wired up) but was **not** extended, tested, or verified in this session. It has no
-test coverage yet. Treat it as a distinct, separately-trackable follow-up, not part of the
-statusMap fix below.
+Nothing mid-flight. The sync-lock/lifecycle scaffolding flagged as untested in the previous
+session has now been verified and one real bug in it was fixed (see below).
 
 ## Completed Recently
 
-- **Fixed a real Phase 1 bug**: `StatusMap` (a `Map`) was being returned as-is through
-  `chrome.runtime.sendMessage`'s response. Chrome's extension messaging API serializes
-  messages as JSON by default (not structured clone), which collapses any `Map` into `{}`.
-  The popup's `statusMap.get(...)` then failed with `TypeError: f.get is not a function`.
-  Root cause, trace, and fix are documented in `src/messaging/protocol.ts`.
-  - Fix: `serializeStatusMap`/`deserializeStatusMap` in a new, documented message-boundary
-    module (`src/messaging/protocol.ts`), used by `service-worker.ts` (serialize before
-    `sendResponse`) and `popup.ts` (deserialize after receiving). `classify.ts` and the
-    internal `StatusMap` type were **not** changed — `Map` is still used internally.
-  - Verified every other `Map`/`Set` usage in the codebase (`normalize.ts`,
-    `syncService.ts`'s `mergeSubmissions`) is fully local and never crosses a
-    storage/messaging boundary. `chrome.storage.local` never persists a `StatusMap` (already
-    true before this fix — see "Important Decisions" below).
-  - Added `src/test/protocol.test.ts` (3 tests): serialization produces a plain array,
-    survives a real `JSON.stringify`/`JSON.parse` round-trip with `.get()` still working
-    afterward, and a regression test reproducing the original bug directly
-    (`JSON.parse(JSON.stringify(new Map()))` → `{}`).
-  - `npm run typecheck`: pass. `npm test`: 24/24 pass (was 21; +3 new). `npm run build`:
-    still fails in this sandbox for the pre-existing, unrelated reason (no network access to
-    install `vite`/`@crxjs/vite-plugin` — see "Known Issues", unchanged by this fix).
+- **Verified and fixed the sync-lock/lifecycle behavior** in
+  `popup.ts`/`util/exclusiveTask.ts`. Findings:
+  - `createExclusiveRunner`'s core lock semantics were already correct: a run starts
+    normally, a concurrent second run is rejected with `AlreadyRunningError`, and the lock
+    (an in-memory `running` flag) is released in a `finally` on both success and
+    failure/throw/rejection, so a subsequent run is never permanently blocked. Confirmed
+    with 6 new direct unit tests in `src/test/exclusiveTask.test.ts` (previously zero
+    coverage) — all pass.
+  - Found one real, narrow bug in `popup.ts`'s `handleSyncClick`: `setBusy(true)` /
+    `setBusy(false)` were called unconditionally around the whole `runExclusive(...)` call.
+    If a second sync attempt arrived while one was already running, its rejection
+    (`AlreadyRunningError`) still ran through the outer `finally`, which called
+    `setBusy(false)` — re-enabling the Sync/Refresh/Query buttons while the *first* sync was
+    still genuinely in progress. In the normal single-mouse UI flow this is largely masked
+    (the buttons are already disabled, so a real click can't land during the window), but
+    it's a real correctness gap for any other trigger path (tests, a future auto-sync timer,
+    programmatic invocation) and was worth fixing since it directly relates to requirement
+    "a second sync attempt should be prevented" meaning the UI state should stay accurate,
+    not just that `syncAll` doesn't literally run twice.
+  - Fix: `setBusy(true)`/`setBusy(false)` moved *inside* the task passed to `runExclusive`,
+    so they only run for the call that actually acquires the lock. A rejected/overlapping
+    call's catch block now only prints a message — it never touches busy state owned by the
+    in-flight sync. Smallest possible change: no changes to `exclusiveTask.ts` at all.
+  - Confirmed (already true, unchanged): unexpected exceptions from `syncAll` are always
+    caught by `handleSyncClick`'s `try/catch` and shown in the popup instead of becoming an
+    unhandled rejection — the popup can't get stuck showing "Syncing…" forever.
+  - `npm run typecheck`: pass. `npm test`: **30/30 pass** (was 24; +6 new
+    `exclusiveTask.test.ts` tests).
 
-- Phase 1 implementation, project-management docs, and Git init (see earlier entries below /
-  in `CHANGELOG.md`).
+- statusMap Chrome-messaging fix (previous session — see `CHANGELOG.md`).
+- Phase 1 implementation, project-management docs, and Git init (see `CHANGELOG.md`).
 
 ## Known Issues
 
-- **The real Vite/CRXJS build has never been run.** Same as before this session — no network
-  access in this sandbox to `npm install`. Re-confirmed again after this fix
-  (`sh: 1: vite: not found`, no `node_modules`, no `dist/`). Not caused by or related to the
-  statusMap fix. **First thing to verify once development continues with normal network
-  access.**
-- **Untested sync-lock/lifecycle scaffolding already sits in `popup.ts`/`exclusiveTask.ts`**
-  (see "Currently Working On"). It's plausible-looking code (mutex-style guard, released in
-  a `finally`) but has zero test coverage and hasn't been through a dedicated review/fix
-  pass. Don't assume it's correct just because it's present — treat it the same as any other
-  unverified code per `CLAUDE.md`.
+- **The real Vite/CRXJS build has never been run.** Same as before — no network access in
+  this sandbox to `npm install`. Not caused by or related to any application fix so far.
+  **First thing to verify once development continues with normal network access.**
 - No `@types/chrome` — three files declare `chrome` as `any` instead. Intentional, not a
   defect (see `README.md`/`ARCHITECTURE.md`).
 - CORS/direct-fetch-from-extension behavior against `codeforces.com/api` is inferred from
@@ -83,6 +78,17 @@ statusMap fix below.
 - Contest names aren't resolved — deferred; not needed for classification/statistics.
 - No mechanism yet auto-detects a changed Codeforces handle and clears stale cache —
   earmarked for the Settings phase (Phase 9).
+- **`popup.ts`'s `sendMessage` doesn't check `chrome.runtime.lastError`.** If the background
+  service worker is terminated mid-request (a normal MV3 occurrence) and the message port
+  closes without a response, `chrome.runtime.sendMessage`'s callback fires with
+  `response === undefined` and `chrome.runtime.lastError` set — but nothing reads
+  `lastError`, so `sendMessage` would resolve with `undefined` instead of rejecting. The
+  caller (`syncAll`) would then throw a generic `TypeError` (e.g. "Cannot read properties of
+  undefined (reading 'ok')") reading `.ok` off `undefined`. This *is* still caught by
+  `handleSyncClick`'s `try/catch` and shown in the popup rather than silently hanging — so
+  it does not violate the sync-lock guarantees verified this session — but the resulting
+  error message is uninformative. Noted as a real gap, intentionally not fixed here since it
+  is a distinct concern from the sync-lock task (see `CHANGELOG.md`).
 
 ## Tests
 
@@ -90,7 +96,7 @@ Run via `npm test` (= `npx tsx src/test/run.ts`), a zero-dependency custom harne
 (`src/test/testKit.ts`) — no test framework installed yet, intentionally, per
 `CLAUDE.md`'s "don't add dependencies unnecessarily."
 
-**Current result: 24/24 passing** (re-verified this session; was 21, +3 new). Coverage:
+**Current result: 30/30 passing** (was 24, +6 new). Coverage:
 
 - `classify.test.ts` (8 tests): SOLVED/ATTEMPTED/UNATTEMPTED classification, failed-attempt
   counting, duplicate-submission dedup, independent per-problem classification, null-verdict
@@ -103,9 +109,12 @@ Run via `npm test` (= `npx tsx src/test/run.ts`), a zero-dependency custom harne
   range.
 - `api.test.ts` (5 tests): invalid-handle detection, rate-limit retry/backoff, pagination
   continuation and early-stop.
-- `protocol.test.ts` (3 tests, new): `StatusMap` serializes to a plain JSON-safe array (not
+- `protocol.test.ts` (3 tests): `StatusMap` serializes to a plain JSON-safe array (not
   a `Map`); survives a real `JSON.stringify`/`JSON.parse` round-trip with `.get()` still
   working afterward; a regression test reproducing the original bug directly.
+- `exclusiveTask.test.ts` (6 tests, new): normal run, concurrent-run rejection, lock release
+  on success, lock release on a thrown error, lock release on an async rejection, and
+  independent locks across separate runner instances.
 
 `npm run typecheck` (`tsc --noEmit`) also passes cleanly — re-verified during this audit.
 
@@ -134,9 +143,8 @@ deliberate:
 
 ## Next Task
 
-**Verify/finish the sync-lock scaffolding already sitting in `popup.ts`/`exclusiveTask.ts`**
-as its own isolated task (it currently has zero test coverage and hasn't been reviewed).
-Only after that's resolved: **Phase 2 — Core filtering + statistics engine** — a
+**Phase 2 — Core filtering + statistics engine.** All Phase 1 follow-up items (statusMap
+serialization, sync-lock lifecycle) are now verified/fixed and tested. Implement a
 `getProblems({ minRating?, maxRating?, exactRating?, status?, tags?, contestId? })`-style
 query function built on the existing `Problem[]` + `StatusMap` primitives, plus
 rating-distribution and success-rate calculations. No dashboard UI yet (Phase 3). Write
@@ -144,36 +152,47 @@ tests for edge cases before considering it done, per `CLAUDE.md`.
 
 ## Last Session Summary
 
-**This session's actual work:** Fixed a real, user-reported Phase 1 bug — `StatusMap`
-losing its `Map` prototype across `chrome.runtime.sendMessage`. Scope was deliberately
-narrow per explicit instruction (statusMap fix only; no sync-lock work; no Phase 2):
+**This session's actual work:** Verified the sync-lock/lifecycle behavior in
+`popup.ts`/`util/exclusiveTask.ts` (flagged as untested in the prior session), per an
+explicit isolated task with no Phase 2 work:
 
-- Inspected pre-existing uncommitted changes from an earlier pass (`service-worker.ts`,
-  `popup.ts`, `src/messaging/protocol.ts`, `src/util/exclusiveTask.ts`,
-  `src/test/protocol.test.ts`) and confirmed the statusMap serialize/deserialize design was
-  already correctly implemented and did not need further changes.
-- Found and fixed the one gap: `src/test/run.ts` didn't import `protocol.test.ts` yet, so
-  those tests never actually ran.
-- Left the pre-existing, untouched sync-lock/lifecycle scaffolding
-  (`createExclusiveRunner`/`AlreadyRunningError` in `popup.ts`/`exclusiveTask.ts`) exactly as
-  found — not removed (per instruction not to discard existing changes), not extended or
-  tested (per instruction not to work on it this session).
-- Ran `npm run typecheck` (pass), `npm test` (24/24 pass, +3 new), `npm run build` (fails —
-  confirmed this is the same pre-existing "no network access to install vite" limitation,
-  unrelated to this fix).
+- Inspected `createExclusiveRunner`/`AlreadyRunningError` and `popup.ts`'s
+  `handleSyncClick`/`syncAll` in full before changing anything.
+- Wrote 6 direct unit tests for `createExclusiveRunner` (`src/test/exclusiveTask.test.ts`) —
+  it had zero coverage before this session. All 6 passed against the *existing,
+  unmodified* implementation: normal start, concurrent-run rejection, lock release on
+  success, lock release on a thrown error, lock release on an async rejection, independent
+  locks per runner instance. **The core lock mechanism itself needed no changes.**
+- Found one real, narrow bug in `popup.ts`'s `handleSyncClick`: `setBusy(true)`/
+  `setBusy(false)` wrapped the *entire* `runExclusive(...)` call, so a rejected
+  (`AlreadyRunningError`) overlapping attempt's own `finally` would call `setBusy(false)`,
+  re-enabling the buttons while the genuinely-running first sync was still in flight.
+  Fixed by moving `setBusy(true)`/`setBusy(false)` inside the task passed to `runExclusive`,
+  so only the call that actually acquires the lock touches busy state. No changes to
+  `exclusiveTask.ts` were needed.
+- Confirmed (already correct, unchanged): unexpected exceptions from `syncAll` are always
+  caught and shown in the popup — it can't get stuck on "Syncing…" — because
+  `handleSyncClick`'s `try/catch` wraps the whole `runExclusive` call regardless of how
+  `setBusy` is scoped inside it.
+- Noted one related-but-out-of-scope gap for the record (not fixed): `popup.ts`'s
+  `sendMessage` doesn't check `chrome.runtime.lastError`, so a message port closing without
+  a response (an MV3 service-worker-termination edge case) would surface as an uninformative
+  generic `TypeError` rather than a clear message — still caught and shown, just not
+  worded well. See "Known Issues."
+- Ran `npm run typecheck` (pass) and `npm test` (30/30 pass, was 24; +6 new). Per
+  instruction, did not attempt `npm install`/`npm run build`.
 - Updated `PROJECT_STATUS.md` (this file) and `CHANGELOG.md`. Committed.
 
-**Files changed:** `src/test/run.ts` (added one import). No other application files needed
-changes — `service-worker.ts`, `popup.ts`, `messaging/protocol.ts`, `util/exclusiveTask.ts`,
-`test/protocol.test.ts` were already correct from the earlier uncommitted pass and are now
-committed as-is.
+**Files changed:** `src/popup/popup.ts` (the targeted `handleSyncClick` fix),
+`src/test/exclusiveTask.test.ts` (new, 6 tests), `src/test/run.ts` (added one import).
+`src/util/exclusiveTask.ts` was inspected but not modified — its logic was already correct.
 
-**Tests run:** `npm run typecheck` (pass), `npm test` (24/24 pass), `npm run build`
-(fails — pre-existing, unrelated environment limitation).
+**Tests run:** `npm run typecheck` (pass), `npm test` (30/30 pass). `npm run build` was
+intentionally not attempted this session per instruction.
 
-**Result:** statusMap Chrome-messaging bug fixed and regression-tested. Sync-lock
-scaffolding remains present but unverified/untested — flagged as a distinct next item, not
-silently treated as done.
+**Result:** All 7 sync-lock/lifecycle guarantees requested are now verified and, where one
+was actually broken, fixed and regression-tested.
 
-**Remaining work:** Verify/test the sync-lock scaffolding as its own isolated task (not yet
-started); then Phase 2 (filtering + statistics engine) once that's resolved. See "Next Task."
+**Remaining work:** Phase 2 (filtering + statistics engine). See "Next Task." The
+`chrome.runtime.lastError` gap noted above remains open (tracked in "Known Issues"), as does
+the never-yet-run real Vite/CRXJS build.

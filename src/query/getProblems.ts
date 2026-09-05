@@ -41,3 +41,29 @@ export function getProblems(problems: Problem[], statusMap: StatusMap, filters: 
     return true;
   });
 }
+
+export interface ProblemStats {
+  total: number;
+  solved: number;
+  attempted: number;
+  unattempted: number;
+}
+
+/** Counts `problems` by status. `total` is always `problems.length`, not `statusMap.size`. */
+export function getProblemStats(problems: Problem[], statusMap: StatusMap): ProblemStats {
+  let solved = 0;
+  let attempted = 0;
+
+  for (const problem of problems) {
+    const status = getStatus(statusMap, problem.key);
+    if (status === ProblemStatus.Solved) solved += 1;
+    else if (status === ProblemStatus.Attempted) attempted += 1;
+  }
+
+  return {
+    total: problems.length,
+    solved,
+    attempted,
+    unattempted: problems.length - solved - attempted,
+  };
+}

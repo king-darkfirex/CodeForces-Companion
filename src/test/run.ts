@@ -6,6 +6,7 @@ import "./api.test";
 import "./protocol.test";
 import "./exclusiveTask.test";
 import "./getProblems.test";
+import "./getProblemStats.test";
 import { run } from "./testKit";
 
 await run();

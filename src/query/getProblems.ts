@@ -6,7 +6,8 @@ import { getStatus } from "../data/classify";
 export interface ProblemFilters {
   minRating?: number;
   maxRating?: number;
-  status?: ProblemStatus;
+  /** A single status, or a list of acceptable statuses (matches if the problem's status is any of them). An empty list matches nothing. */
+  status?: ProblemStatus | ProblemStatus[];
   tags?: string[];
 }
 
@@ -20,6 +21,7 @@ export function getProblems(problems: Problem[], statusMap: StatusMap, filters: 
   const { minRating, maxRating, status, tags } = filters;
   const hasRatingFilter = minRating !== undefined || maxRating !== undefined;
   const requiredTags = tags && tags.length > 0 ? tags : null;
+  const allowedStatuses = status === undefined ? null : Array.isArray(status) ? status : [status];
 
   return problems.filter((problem) => {
     if (hasRatingFilter) {
@@ -28,7 +30,7 @@ export function getProblems(problems: Problem[], statusMap: StatusMap, filters: 
       if (maxRating !== undefined && problem.rating > maxRating) return false;
     }
 
-    if (status !== undefined && getStatus(statusMap, problem.key) !== status) {
+    if (allowedStatuses !== null && !allowedStatuses.includes(getStatus(statusMap, problem.key))) {
       return false;
     }
 

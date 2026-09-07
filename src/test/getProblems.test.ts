@@ -137,3 +137,60 @@ test("getProblems never mutates the input array or its elements", () => {
   assertEqual(allProblems, original);
   assertTrue(result !== allProblems, "expected a new array, not the same reference");
 });
+
+test("status accepts an array: solved + attempted matches either", () => {
+  const result = getProblems(allProblems, buildStatusMap(), { status: [ProblemStatus.Solved, ProblemStatus.Attempted] });
+  assertEqual(keys(result), ["C1-A", "C1-B"]);
+});
+
+test("status accepts an array: solved + unattempted matches either", () => {
+  const result = getProblems(allProblems, buildStatusMap(), { status: [ProblemStatus.Solved, ProblemStatus.Unattempted] });
+  assertEqual(keys(result), ["C1-A", "C1-C", "C1-D"]);
+});
+
+test("status accepts an array of all three statuses, matching everything", () => {
+  const result = getProblems(allProblems, buildStatusMap(), {
+    status: [ProblemStatus.Solved, ProblemStatus.Attempted, ProblemStatus.Unattempted],
+  });
+  assertEqual(keys(result), ["C1-A", "C1-B", "C1-C", "C1-D"]);
+});
+
+test("an empty status array matches nothing", () => {
+  const result = getProblems(allProblems, buildStatusMap(), { status: [] });
+  assertEqual(result, []);
+});
+
+test("a missing StatusMap entry still behaves as UNATTEMPTED when status is an array", () => {
+  const result = getProblems(allProblems, buildStatusMap(), { status: [ProblemStatus.Unattempted] });
+  assertEqual(keys(result), ["C1-C", "C1-D"]);
+});
+
+test("a single-status array behaves the same as passing that status directly (backward compatible)", () => {
+  const viaValue = getProblems(allProblems, buildStatusMap(), { status: ProblemStatus.Solved });
+  const viaArray = getProblems(allProblems, buildStatusMap(), { status: [ProblemStatus.Solved] });
+  assertEqual(keys(viaValue), keys(viaArray));
+});
+
+test("multi-status filter combines with a rating filter", () => {
+  const result = getProblems(allProblems, buildStatusMap(), {
+    minRating: 1000,
+    status: [ProblemStatus.Attempted, ProblemStatus.Unattempted],
+  });
+  // C1-B (1200, attempted) and C1-C (1600, unattempted) qualify; C1-D is unrated so excluded by the rating filter.
+  assertEqual(keys(result), ["C1-B", "C1-C"]);
+});
+
+test("multi-status filter combines with a tag filter", () => {
+  const result = getProblems(allProblems, buildStatusMap(), {
+    status: [ProblemStatus.Solved, ProblemStatus.Unattempted],
+    tags: ["dp"],
+  });
+  // Only C1-C has tag "dp" and is in {SOLVED, UNATTEMPTED}; C1-A has no "dp" tag; C1-B is ATTEMPTED not in the list.
+  assertEqual(keys(result), ["C1-C"]);
+});
+
+test("multi-status filtering does not mutate the input array or its elements", () => {
+  const original = allProblems.map((p) => ({ ...p, tags: [...p.tags] }));
+  getProblems(allProblems, buildStatusMap(), { status: [ProblemStatus.Solved, ProblemStatus.Attempted] });
+  assertEqual(allProblems, original);
+});

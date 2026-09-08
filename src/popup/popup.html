@@ -31,6 +31,13 @@
         padding: 4px 6px;
         font-size: 13px;
       }
+      select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 4px 6px;
+        font-size: 13px;
+        margin-top: 8px;
+      }
       button {
         margin-top: 8px;
         padding: 6px 10px;
@@ -76,7 +83,14 @@
         <input id="maxRating" type="number" value="1400" />
       </div>
     </div>
-    <button id="query">Count unattempted in range</button>
+    <label for="status">Status</label>
+    <select id="status">
+      <option value="all">All</option>
+      <option value="solved">Solved</option>
+      <option value="attempted">Attempted</option>
+      <option value="unattempted" selected>Unattempted</option>
+    </select>
+    <button id="query">Count problems in range</button>
 
     <pre id="output">Enter your Codeforces handle to start analyzing your solving history.</pre>
 

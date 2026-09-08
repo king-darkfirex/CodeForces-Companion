@@ -9,6 +9,7 @@ import "./getProblems.test";
 import "./getProblemStats.test";
 import "./getRandomProblem.test";
 import "./getRandomProblemByFilter.test";
+import "./statusSelect.test";
 import { run } from "./testKit";
 
 await run();

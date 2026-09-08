@@ -13,6 +13,8 @@ import {
   deserializeStatusMap,
 } from "../messaging/protocol";
 import { createExclusiveRunner, AlreadyRunningError } from "../util/exclusiveTask";
+import { getProblems } from "../query/getProblems";
+import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const output = $<HTMLPreElement>("output");
@@ -150,15 +152,18 @@ function runRangeQuery() {
     }
     const min = Number($<HTMLInputElement>("minRating").value);
     const max = Number($<HTMLInputElement>("maxRating").value);
+    const statusValue = $<HTMLSelectElement>("status").value as StatusSelectValue;
+    const status = statusFilterFromSelection(statusValue);
 
-    const matches = lastState.problems.filter((p) => {
-      if (p.rating === null || p.rating < min || p.rating > max) return false;
-      const status = lastState!.statusMap.get(p.key)?.status ?? ProblemStatus.Unattempted;
-      return status === ProblemStatus.Unattempted;
+    const matches = getProblems(lastState.problems, lastState.statusMap, {
+      minRating: min,
+      maxRating: max,
+      status,
     });
 
+    const statusLabel = status ?? "any status";
     print(
-      `${matches.length} unattempted problem(s) rated ${min}–${max}.\n\n` +
+      `${matches.length} problem(s) rated ${min}–${max} (${statusLabel}).\n\n` +
         matches
           .slice(0, 15)
           .map((p) => `${p.key}  ${p.name}  (${p.rating})`)

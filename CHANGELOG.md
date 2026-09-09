@@ -3,6 +3,30 @@
 Concise, chronological record of meaningful changes. Not every edit — only things worth a
 future session (or you) knowing happened.
 
+## Session: Add minimal Random Problem popup UI
+
+**Type:** Feature (UI), narrowly scoped.
+
+- Added a "Random Problem" button to the popup, reusing the existing `getRandomProblem()`
+  unfiltered (rating/status/tag filtering via `getRandomProblemByFilter()` is a separate,
+  later task). Displays the picked problem's name, contest+index identifier, and rating as
+  a clickable link to its real Codeforces page, built with the existing `problemUrl()`
+  helper — no new URL-construction logic.
+- New `src/popup/randomProblemDisplay.ts` (`formatRandomProblemDisplay()`): the only new
+  logic, a small DOM-free formatting function, extracted so it's testable (same reason
+  `statusSelect.ts` was split out from `popup.ts` earlier — `popup.ts` itself touches
+  `document` at import time and can't be unit tested directly).
+- 3 new tests (`src/test/randomProblemDisplay.test.ts`): rated contest problem, unrated
+  problem, and a `problemsetName`-based problem with no `contestId`.
+- No changes to filtering, statistics, sync, caching, or the status-selector — all untouched.
+- `npm run typecheck`: pass. `npm test`: **89/89 pass** (was 86, +3 new).
+- **Note:** `PROJECT_STATUS.md`/this file had fallen behind several already-committed Phase 2
+  sessions (filtering engine, statistics, random selection, multi-status filters, the
+  status-selector UI) before this session started. Not backfilled here — out of scope for a
+  narrowly-scoped task. `git log` is the authoritative record for that gap.
+
+---
+
 ## Session: Verify + fix sync-lock/lifecycle behavior
 
 **Type:** Verification + targeted bug fix. Scope deliberately narrow per instruction (this

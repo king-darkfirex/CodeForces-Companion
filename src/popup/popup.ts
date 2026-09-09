@@ -14,11 +14,13 @@ import {
 } from "../messaging/protocol";
 import { createExclusiveRunner, AlreadyRunningError } from "../util/exclusiveTask";
 import { getProblems } from "../query/getProblems";
+import { getRandomProblem } from "../query/getRandomProblem";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
+import { formatRandomProblemDisplay } from "./randomProblemDisplay";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const output = $<HTMLPreElement>("output");
-const actionButtons = ["sync", "refresh", "query"].map((id) => $<HTMLButtonElement>(id));
+const actionButtons = ["sync", "refresh", "query", "random"].map((id) => $<HTMLButtonElement>(id));
 
 function print(text: string) {
   output.textContent = text;
@@ -176,6 +178,43 @@ function runRangeQuery() {
   }
 }
 
+/**
+ * Picks a random problem from the currently loaded problemset (no
+ * rating/status/tag filtering yet — that's `getRandomProblemByFilter()`,
+ * wired up in a later task) and renders it as a clickable link to its
+ * Codeforces problem page. All selection logic lives in `getRandomProblem()`
+ * and all formatting logic lives in `formatRandomProblemDisplay()`; this
+ * function only reads the result and updates the DOM.
+ */
+function showRandomProblem() {
+  const resultEl = $<HTMLDivElement>("randomResult");
+  try {
+    if (!lastState) {
+      resultEl.textContent = "Sync first, then pick a random problem.";
+      return;
+    }
+
+    const problem = getRandomProblem(lastState.problems);
+    if (!problem) {
+      resultEl.textContent = "No problems available to pick from.";
+      return;
+    }
+
+    const { label, url } = formatRandomProblemDisplay(problem);
+    resultEl.textContent = "";
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = label;
+    resultEl.appendChild(link);
+  } catch (err) {
+    const e = err as { name?: string; message?: string };
+    resultEl.textContent = `Unexpected error picking a random problem: [${e?.name ?? "Error"}] ${e?.message ?? String(err)}`;
+  }
+}
+
 $("sync").addEventListener("click", () => void handleSyncClick(false));
 $("refresh").addEventListener("click", () => void handleSyncClick(true));
 $("query").addEventListener("click", runRangeQuery);
+$("random").addEventListener("click", showRandomProblem);

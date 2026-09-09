@@ -60,6 +60,13 @@
         max-height: 220px;
         overflow: auto;
       }
+      .random-result {
+        margin-top: 8px;
+        font-size: 12px;
+      }
+      .random-result a {
+        color: #1a73e8;
+      }
     </style>
   </head>
   <body>
@@ -91,6 +98,9 @@
       <option value="unattempted" selected>Unattempted</option>
     </select>
     <button id="query">Count problems in range</button>
+
+    <button id="random">Random Problem</button>
+    <div id="randomResult" class="random-result"></div>
 
     <pre id="output">Enter your Codeforces handle to start analyzing your solving history.</pre>
 

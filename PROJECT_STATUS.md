@@ -29,42 +29,38 @@ filtering, it is not the Phase 2 engine).
 
 ## Currently Working On
 
-Nothing mid-flight. The sync-lock/lifecycle scaffolding flagged as untested in the previous
-session has now been verified and one real bug in it was fixed (see below).
+Nothing mid-flight. This session added a minimal popup UI for random problem selection
+(unfiltered) — see below.
+
+**Note on this file's freshness:** this file was last fully updated after the sync-lock
+session; several Phase 2 sessions since then (filtering engine, statistics, random
+selection, multi-status filters, the status-selector UI) were completed and committed
+without updating this file. That gap predates this session and wasn't backfilled here
+(out of scope for a narrowly-scoped task) — treat the actual `git log` as the source of
+truth for what's built, per `CLAUDE.md`'s "don't assume previous work is complete/incomplete
+just because a document says so."
 
 ## Completed Recently
 
-- **Verified and fixed the sync-lock/lifecycle behavior** in
-  `popup.ts`/`util/exclusiveTask.ts`. Findings:
-  - `createExclusiveRunner`'s core lock semantics were already correct: a run starts
-    normally, a concurrent second run is rejected with `AlreadyRunningError`, and the lock
-    (an in-memory `running` flag) is released in a `finally` on both success and
-    failure/throw/rejection, so a subsequent run is never permanently blocked. Confirmed
-    with 6 new direct unit tests in `src/test/exclusiveTask.test.ts` (previously zero
-    coverage) — all pass.
-  - Found one real, narrow bug in `popup.ts`'s `handleSyncClick`: `setBusy(true)` /
-    `setBusy(false)` were called unconditionally around the whole `runExclusive(...)` call.
-    If a second sync attempt arrived while one was already running, its rejection
-    (`AlreadyRunningError`) still ran through the outer `finally`, which called
-    `setBusy(false)` — re-enabling the Sync/Refresh/Query buttons while the *first* sync was
-    still genuinely in progress. In the normal single-mouse UI flow this is largely masked
-    (the buttons are already disabled, so a real click can't land during the window), but
-    it's a real correctness gap for any other trigger path (tests, a future auto-sync timer,
-    programmatic invocation) and was worth fixing since it directly relates to requirement
-    "a second sync attempt should be prevented" meaning the UI state should stay accurate,
-    not just that `syncAll` doesn't literally run twice.
-  - Fix: `setBusy(true)`/`setBusy(false)` moved *inside* the task passed to `runExclusive`,
-    so they only run for the call that actually acquires the lock. A rejected/overlapping
-    call's catch block now only prints a message — it never touches busy state owned by the
-    in-flight sync. Smallest possible change: no changes to `exclusiveTask.ts` at all.
-  - Confirmed (already true, unchanged): unexpected exceptions from `syncAll` are always
-    caught by `handleSyncClick`'s `try/catch` and shown in the popup instead of becoming an
-    unhandled rejection — the popup can't get stuck showing "Syncing…" forever.
-  - `npm run typecheck`: pass. `npm test`: **30/30 pass** (was 24; +6 new
-    `exclusiveTask.test.ts` tests).
+- **Added a minimal "Random Problem" action to the popup**, reusing the existing
+  `getRandomProblem()` with no rating/status/tag filtering yet (that's
+  `getRandomProblemByFilter()`, already implemented, just not wired into this button in this
+  session). Selects from the currently-loaded problemset and renders the result as a
+  clickable link (name, contest+index identifier, rating) opening the problem's real
+  Codeforces page in a new tab via the existing `problemUrl()` helper — no new URL logic.
+  - New `src/popup/randomProblemDisplay.ts`: a small, DOM-free `formatRandomProblemDisplay()`
+    for the display label/URL, extracted so it's unit-testable (`popup.ts` itself can't be,
+    since it touches `document` at import time — same reason `statusSelect.ts` was split out
+    earlier).
+  - `popup.html`/`popup.ts`: one button + one result `<div>`; the "random" button joins the
+    existing busy-during-sync button group for consistency with "query".
+  - 3 new tests (`randomProblemDisplay.test.ts`): rated contest problem, unrated problem,
+    and a `problemsetName`-based (no-`contestId`) problem.
+  - `npm run typecheck`: pass. `npm test`: **89/89 pass** (was 86, +3 new).
 
-- statusMap Chrome-messaging fix (previous session — see `CHANGELOG.md`).
-- Phase 1 implementation, project-management docs, and Git init (see `CHANGELOG.md`).
+- statusMap Chrome-messaging fix, sync-lock verification/fix, and Phase 2 filtering/stats/
+  random-selection/status-selector work (previous sessions — see `CHANGELOG.md` and `git log`
+  for the full list; not reproduced here per the freshness note above).
 
 ## Known Issues
 
@@ -96,7 +92,13 @@ Run via `npm test` (= `npx tsx src/test/run.ts`), a zero-dependency custom harne
 (`src/test/testKit.ts`) — no test framework installed yet, intentionally, per
 `CLAUDE.md`'s "don't add dependencies unnecessarily."
 
-**Current result: 30/30 passing** (was 24, +6 new). Coverage:
+**Current result: 89/89 passing** as of this session (re-run directly, not assumed). The
+detailed per-file coverage list below is from the sync-lock session and predates several
+since-committed test files (`getProblems.test.ts`, `getProblemStats.test.ts`,
+`getRandomProblem.test.ts`, `getRandomProblemByFilter.test.ts`, `statusSelect.test.ts`,
+`randomProblemDisplay.test.ts`) — not backfilled here per this session's narrow scope; see
+`git log` / `src/test/run.ts` for the authoritative current list. Coverage as of the
+sync-lock session:
 
 - `classify.test.ts` (8 tests): SOLVED/ATTEMPTED/UNATTEMPTED classification, failed-attempt
   counting, duplicate-submission dedup, independent per-problem classification, null-verdict

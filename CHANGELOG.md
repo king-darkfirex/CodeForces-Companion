@@ -3,6 +3,31 @@
 Concise, chronological record of meaningful changes. Not every edit — only things worth a
 future session (or you) knowing happened.
 
+## Session: Random Problem now respects the rating/status filters
+
+**Type:** Feature (UI), narrowly scoped.
+
+- The "Random Problem" button now reads the same min/max rating inputs and status `<select>`
+  that "Count problems in range" already reads, and passes them to the existing
+  `getRandomProblemByFilter()` — no new filtering or selection logic; `showRandomProblem()`
+  swapped its call from `getRandomProblem(lastState.problems)` (whole problemset) to
+  `getRandomProblemByFilter(problems, statusMap, { minRating, maxRating, status })`.
+  "Any status" still maps to `undefined` (no restriction) via the existing
+  `statusFilterFromSelection()`, unchanged.
+- Empty-result message changed from "No problems available to pick from." to "No problems
+  match the selected filters." to reflect that a match failure is now about the filters, not
+  just an empty problemset.
+- No new pure logic was introduced (this only wires two already-tested functions together
+  the same way `runRangeQuery` already does), so no new tests were added — the existing
+  `getRandomProblemByFilter` and `statusSelect` suites already cover the behavior being
+  reused. `npm run typecheck`: pass. `npm test`: **89/89 pass** (unchanged from before this
+  session — confirms nothing else broke).
+- No changes to sync, caching, statistics, or the underlying filtering/random-selection
+  implementations (`getProblems`, `getRandomProblem`, `getRandomProblemByFilter` themselves
+  are all untouched).
+
+---
+
 ## Session: Add minimal Random Problem popup UI
 
 **Type:** Feature (UI), narrowly scoped.

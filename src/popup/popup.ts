@@ -14,7 +14,7 @@ import {
 } from "../messaging/protocol";
 import { createExclusiveRunner, AlreadyRunningError } from "../util/exclusiveTask";
 import { getProblems } from "../query/getProblems";
-import { getRandomProblem } from "../query/getRandomProblem";
+import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
 import { formatRandomProblemDisplay } from "./randomProblemDisplay";
 
@@ -179,12 +179,13 @@ function runRangeQuery() {
 }
 
 /**
- * Picks a random problem from the currently loaded problemset (no
- * rating/status/tag filtering yet — that's `getRandomProblemByFilter()`,
- * wired up in a later task) and renders it as a clickable link to its
- * Codeforces problem page. All selection logic lives in `getRandomProblem()`
- * and all formatting logic lives in `formatRandomProblemDisplay()`; this
- * function only reads the result and updates the DOM.
+ * Picks a random problem matching the currently selected rating range and
+ * status (the same controls `runRangeQuery` reads), via the existing
+ * `getRandomProblemByFilter()` — which itself is just `getProblems()` then
+ * `getRandomProblem()`, so no filtering or selection logic is duplicated
+ * here. Renders the result as a clickable link to its Codeforces problem
+ * page via `formatRandomProblemDisplay()`; this function only reads the
+ * result and updates the DOM.
  */
 function showRandomProblem() {
   const resultEl = $<HTMLDivElement>("randomResult");
@@ -194,9 +195,18 @@ function showRandomProblem() {
       return;
     }
 
-    const problem = getRandomProblem(lastState.problems);
+    const min = Number($<HTMLInputElement>("minRating").value);
+    const max = Number($<HTMLInputElement>("maxRating").value);
+    const statusValue = $<HTMLSelectElement>("status").value as StatusSelectValue;
+    const status = statusFilterFromSelection(statusValue); // "Any status" -> undefined -> no restriction
+
+    const problem = getRandomProblemByFilter(lastState.problems, lastState.statusMap, {
+      minRating: min,
+      maxRating: max,
+      status,
+    });
     if (!problem) {
-      resultEl.textContent = "No problems available to pick from.";
+      resultEl.textContent = "No problems match the selected filters.";
       return;
     }
 

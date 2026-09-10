@@ -11,6 +11,7 @@ import "./getRandomProblem.test";
 import "./getRandomProblemByFilter.test";
 import "./statusSelect.test";
 import "./randomProblemDisplay.test";
+import "./tagsInput.test";
 import { run } from "./testKit";
 
 await run();

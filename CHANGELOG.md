@@ -3,6 +3,31 @@
 Concise, chronological record of meaningful changes. Not every edit — only things worth a
 future session (or you) knowing happened.
 
+## Session: Add tags filter control to popup
+
+**Type:** Feature (UI), narrowly scoped.
+
+- Added a "Tags (comma-separated)" text input to the popup, wired into both "Count problems
+  in range" (`getProblems()`) and "Random Problem" (`getRandomProblemByFilter()`). The
+  underlying tag-filtering logic (AND semantics, empty list = no filter) already existed in
+  `getProblems()` from an earlier session and was **not modified** — this session only adds
+  a way to reach it from the UI.
+- New `src/popup/tagsInput.ts` (`parseTagsInput()`): splits on `,`, trims each entry, drops
+  empty entries. An empty/blank input naturally parses to `[]`, which the existing filtering
+  pipeline already treats as "no tag filter" — no extra translation needed. Extracted as a
+  small DOM-free pure function so it's testable, following the same pattern as
+  `statusSelect.ts`/`randomProblemDisplay.ts` (`popup.ts` itself can't be unit-tested, since
+  it touches `document` at import time).
+- 6 new tests (`src/test/tagsInput.test.ts`): empty input, blank/whitespace-only input,
+  single tag, multiple tags, whitespace trimming, and empty entries from double/leading/
+  trailing commas.
+- No changes to rating/status controls, "Any status" behavior, random-problem display/link
+  behavior, or statistics — all untouched. No changes to `getProblems()`,
+  `getRandomProblem()`, or `getRandomProblemByFilter()` themselves.
+- `npm run typecheck`: pass. `npm test`: **95/95 pass** (was 89, +6 new).
+
+---
+
 ## Session: Add minimal statistics section to popup
 
 **Type:** Feature (UI), narrowly scoped.

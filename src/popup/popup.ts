@@ -16,6 +16,7 @@ import { createExclusiveRunner, AlreadyRunningError } from "../util/exclusiveTas
 import { getProblems, getProblemStats } from "../query/getProblems";
 import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
+import { parseTagsInput } from "./tagsInput";
 import { formatRandomProblemDisplay } from "./randomProblemDisplay";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -162,11 +163,13 @@ function runRangeQuery() {
     const max = Number($<HTMLInputElement>("maxRating").value);
     const statusValue = $<HTMLSelectElement>("status").value as StatusSelectValue;
     const status = statusFilterFromSelection(statusValue);
+    const tags = parseTagsInput($<HTMLInputElement>("tags").value);
 
     const matches = getProblems(lastState.problems, lastState.statusMap, {
       minRating: min,
       maxRating: max,
       status,
+      tags,
     });
 
     const statusLabel = status ?? "any status";
@@ -205,11 +208,13 @@ function showRandomProblem() {
     const max = Number($<HTMLInputElement>("maxRating").value);
     const statusValue = $<HTMLSelectElement>("status").value as StatusSelectValue;
     const status = statusFilterFromSelection(statusValue); // "Any status" -> undefined -> no restriction
+    const tags = parseTagsInput($<HTMLInputElement>("tags").value);
 
     const problem = getRandomProblemByFilter(lastState.problems, lastState.statusMap, {
       minRating: min,
       maxRating: max,
       status,
+      tags,
     });
     if (!problem) {
       resultEl.textContent = "No problems match the selected filters.";

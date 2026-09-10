@@ -4,7 +4,7 @@
 declare const chrome: any;
 
 import { Problem } from "../types/problem";
-import { ProblemStatus, StatusMap } from "../types/status";
+import { StatusMap } from "../types/status";
 import {
   ExtensionRequest,
   ExtensionResponse,
@@ -13,7 +13,7 @@ import {
   deserializeStatusMap,
 } from "../messaging/protocol";
 import { createExclusiveRunner, AlreadyRunningError } from "../util/exclusiveTask";
-import { getProblems } from "../query/getProblems";
+import { getProblems, getProblemStats } from "../query/getProblems";
 import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
 import { formatRandomProblemDisplay } from "./randomProblemDisplay";
@@ -28,6 +28,24 @@ function print(text: string) {
 
 function setBusy(busy: boolean) {
   for (const btn of actionButtons) btn.disabled = busy;
+}
+
+/**
+ * The only place that reads `getProblemStats()` and writes it to the DOM —
+ * so the statistics numbers are never computed more than once. Called after
+ * every successful sync, whether that sync came from a fresh fetch or from
+ * cache (`syncAll` doesn't branch differently between the two, so this
+ * naturally covers both).
+ */
+function renderStats(problems: Problem[], statusMap: StatusMap) {
+  const statsEl = $<HTMLPreElement>("stats");
+  const stats = getProblemStats(problems, statusMap);
+  statsEl.textContent = [
+    `Total: ${stats.total}`,
+    `Solved: ${stats.solved}`,
+    `Attempted: ${stats.attempted}`,
+    `Unattempted: ${stats.unattempted}`,
+  ].join("\n");
 }
 
 function sendMessage<T>(message: ExtensionRequest): Promise<ExtensionResponse<T>> {
@@ -79,25 +97,13 @@ async function syncAll(force: boolean): Promise<void> {
   const statusMap = deserializeStatusMap(serializedStatusMap);
 
   lastState = { problems, statusMap };
-
-  let solved = 0;
-  let attempted = 0;
-  for (const p of problems) {
-    const status = statusMap.get(p.key)?.status ?? ProblemStatus.Unattempted;
-    if (status === ProblemStatus.Solved) solved += 1;
-    else if (status === ProblemStatus.Attempted) attempted += 1;
-  }
-  const unattempted = problems.length - solved - attempted;
+  renderStats(problems, statusMap);
 
   print(
     [
       `Handle: ${profile.handle} (rating: ${profile.rating ?? "unrated"})`,
       `Problemset: ${problems.length} problems ${problemsFromCache ? "(cache)" : "(fetched)"}`,
       `Submissions: ${userFromCache ? "(cache)" : "(fetched)"}`,
-      "",
-      `Solved:      ${solved}`,
-      `Attempted:   ${attempted}`,
-      `Unattempted: ${unattempted}`,
     ].join("\n")
   );
 }

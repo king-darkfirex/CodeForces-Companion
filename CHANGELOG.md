@@ -3,6 +3,33 @@
 Concise, chronological record of meaningful changes. Not every edit — only things worth a
 future session (or you) knowing happened.
 
+## Session: Add minimal statistics section to popup
+
+**Type:** Feature (UI), narrowly scoped.
+
+- Added a dedicated `<pre id="stats">` block to the popup showing Total/Solved/Attempted/
+  Unattempted, populated by a new `renderStats()` in `popup.ts` that calls the existing,
+  already-tested `getProblemStats()` — no statistics logic added or duplicated.
+- `renderStats()` is called from `syncAll()` right after `lastState` is set, which removed a
+  real pre-existing duplication: `syncAll()` previously computed solved/attempted/unattempted
+  itself with a manual loop (the exact same calculation `getProblemStats()` already
+  performs) just to print it in the sync-result text. That loop is gone; the printed sync
+  summary now only covers handle/problemset/submissions sync status, and the counts live
+  solely in the new stats block. Since `syncAll()` doesn't branch differently for a fresh
+  fetch vs. a cache hit, the stats block updates correctly in both cases automatically.
+- Initial/no-data state: the `<pre id="stats">` defaults to "No statistics yet — sync to see
+  problem counts." in the HTML, requiring no extra JS state handling.
+- No new pure logic was introduced (this is a direct, single call to an already-exhaustively-
+  tested function plus a template-literal join), so no new tests were added — consistent
+  with how the previous "apply filters to random problem" session also added no tests for
+  the same reason.
+- No changes to sync/caching internals, rating/status query behavior (`runRangeQuery`),
+  Random Problem behavior (`showRandomProblem`), or `getProblemStats()`/`getProblems()`
+  themselves.
+- `npm run typecheck`: pass. `npm test`: **89/89 pass** (unchanged — confirms nothing broke).
+
+---
+
 ## Session: Random Problem now respects the rating/status filters
 
 **Type:** Feature (UI), narrowly scoped.

@@ -44,6 +44,62 @@ export function getProblems(problems: Problem[], statusMap: StatusMap, filters: 
   });
 }
 
+/** Fixed Codeforces rating buckets, in display order. Unrated problems (rating: null) always go to "Unrated". */
+export const RATING_BUCKET_LABELS = [
+  "< 800",
+  "800–999",
+  "1000–1199",
+  "1200–1399",
+  "1400–1599",
+  "1600–1799",
+  "1800–1999",
+  "2000–2199",
+  "2200–2399",
+  "2400–2599",
+  "2600–2799",
+  "2800–2999",
+  "3000+",
+  "Unrated",
+] as const;
+
+export type RatingBucketLabel = (typeof RATING_BUCKET_LABELS)[number];
+
+export type RatingDistribution = Record<RatingBucketLabel, number>;
+
+function bucketForRating(rating: number | null): RatingBucketLabel {
+  if (rating === null) return "Unrated";
+  if (rating < 800) return "< 800";
+  if (rating < 1000) return "800–999";
+  if (rating < 1200) return "1000–1199";
+  if (rating < 1400) return "1200–1399";
+  if (rating < 1600) return "1400–1599";
+  if (rating < 1800) return "1600–1799";
+  if (rating < 2000) return "1800–1999";
+  if (rating < 2200) return "2000–2199";
+  if (rating < 2400) return "2200–2399";
+  if (rating < 2600) return "2400–2599";
+  if (rating < 2800) return "2600–2799";
+  if (rating < 3000) return "2800–2999";
+  return "3000+";
+}
+
+/**
+ * Counts `problems` into fixed rating buckets. Does not use solved/attempted/
+ * unattempted status at all — purely a function of `Problem.rating`. Every
+ * problem belongs to exactly one bucket; unrated problems go to "Unrated"
+ * rather than being dropped. Does not mutate `problems`.
+ */
+export function getRatingDistribution(problems: Problem[]): RatingDistribution {
+  const distribution = {} as RatingDistribution;
+  for (const label of RATING_BUCKET_LABELS) distribution[label] = 0;
+
+  for (const problem of problems) {
+    distribution[bucketForRating(problem.rating)] += 1;
+  }
+
+  return distribution;
+}
+
 export interface ProblemStats {
   total: number;
   solved: number;

@@ -3,6 +3,30 @@
 Concise, chronological record of meaningful changes. Not every edit — only things worth a
 future session (or you) knowing happened.
 
+## Session: Add pure getRatingDistribution() (no UI)
+
+**Type:** Feature (query layer), narrowly scoped — logic only, no popup changes.
+
+- Added `getRatingDistribution(problems: Problem[]): RatingDistribution` to
+  `src/query/getProblems.ts`, alongside (not modifying) the existing `getProblems()` and
+  `getProblemStats()`. Buckets problems into 14 fixed Codeforces rating ranges (`< 800`
+  through `3000+`, plus `Unrated`) purely from `Problem.rating` — does not consult
+  `StatusMap`/solved-attempted-unattempted status at all, and does not filter out unrated
+  problems (they get their own bucket). Does not mutate the input.
+- `RatingDistribution` is a `Record<RatingBucketLabel, number>` where `RatingBucketLabel` is
+  a literal union derived from the exported `RATING_BUCKET_LABELS` array — chosen to reuse
+  the existing "small pure function + plain object result" style already established by
+  `ProblemStats`, rather than introducing a new abstraction (e.g. a class or a Map).
+- 7 new tests (`src/test/getRatingDistribution.test.ts`): every bucket boundary on both
+  sides, null → Unrated, a mixed set of ratings counted correctly, unrated problems counted
+  rather than dropped, an empty list (all buckets zero), every problem accounted for exactly
+  once across a full mix, and non-mutation.
+- No popup/UI changes in this session (explicitly out of scope) — nothing yet reads this
+  function from `popup.ts`.
+- `npm run typecheck`: pass. `npm test`: **102/102 pass** (was 95, +7 new).
+
+---
+
 ## Session: Add tags filter control to popup
 
 **Type:** Feature (UI), narrowly scoped.

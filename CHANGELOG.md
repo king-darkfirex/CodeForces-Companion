@@ -3,6 +3,29 @@
 Concise, chronological record of meaningful changes. Not every edit — only things worth a
 future session (or you) knowing happened.
 
+## Session: Display rating distribution in popup
+
+**Type:** Feature (UI wiring only), narrowly scoped.
+
+- Added `<pre id="ratingDistribution">` to the popup, right after the existing
+  `<pre id="stats">`, reusing the existing generic `pre` CSS rule — no new styling.
+- Added `renderRatingDistribution(problems)` in `popup.ts`, mirroring `renderStats`'s exact
+  shape: it's the only place that calls the existing (unmodified) `getRatingDistribution()`
+  and writes the result to the DOM, one `label: count` line per bucket in
+  `RATING_BUCKET_LABELS` order — no separate formatter extracted, since the line-building is
+  a single `.map().join("\n")`, matching how `renderStats` itself has no extracted formatter.
+  `getRatingDistribution` doesn't take `statusMap`, so this call needs no status data.
+- Called from the same successful-sync spot in `syncAll()` as `renderStats`, right after it —
+  covers both fresh-fetch and cache-hit syncs automatically, same reasoning as `renderStats`.
+- Initial placeholder ("No rating distribution yet — sync to see problem counts.") is static
+  HTML, requiring no extra JS state handling — same pattern as the stats placeholder.
+- No changes to `getRatingDistribution()`, `getProblemStats()`, filtering, status selection,
+  tags, or Random Problem behavior. No charts/bars/percentages/colors added.
+- No new pure logic was introduced, so no new tests were added. `npm run typecheck`: pass.
+  `npm test`: **102/102 pass** (unchanged — confirms nothing else broke).
+
+---
+
 ## Session: Add pure getRatingDistribution() (no UI)
 
 **Type:** Feature (query layer), narrowly scoped — logic only, no popup changes.

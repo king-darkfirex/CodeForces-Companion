@@ -13,7 +13,7 @@ import {
   deserializeStatusMap,
 } from "../messaging/protocol";
 import { createExclusiveRunner, AlreadyRunningError } from "../util/exclusiveTask";
-import { getProblems, getProblemStats } from "../query/getProblems";
+import { getProblems, getProblemStats, getRatingDistribution, RATING_BUCKET_LABELS } from "../query/getProblems";
 import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
 import { parseTagsInput } from "./tagsInput";
@@ -47,6 +47,17 @@ function renderStats(problems: Problem[], statusMap: StatusMap) {
     `Attempted: ${stats.attempted}`,
     `Unattempted: ${stats.unattempted}`,
   ].join("\n");
+}
+
+/**
+ * The only place that reads `getRatingDistribution()` and writes it to the
+ * DOM, mirroring `renderStats` above. Does not use `statusMap` at all, since
+ * `getRatingDistribution` is purely a function of each problem's rating.
+ */
+function renderRatingDistribution(problems: Problem[]) {
+  const distributionEl = $<HTMLPreElement>("ratingDistribution");
+  const distribution = getRatingDistribution(problems);
+  distributionEl.textContent = RATING_BUCKET_LABELS.map((label) => `${label}: ${distribution[label]}`).join("\n");
 }
 
 function sendMessage<T>(message: ExtensionRequest): Promise<ExtensionResponse<T>> {
@@ -99,6 +110,7 @@ async function syncAll(force: boolean): Promise<void> {
 
   lastState = { problems, statusMap };
   renderStats(problems, statusMap);
+  renderRatingDistribution(problems);
 
   print(
     [

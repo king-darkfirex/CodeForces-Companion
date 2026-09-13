@@ -125,3 +125,15 @@ export function getProblemStats(problems: Problem[], statusMap: StatusMap): Prob
     unattempted: problems.length - solved - attempted,
   };
 }
+
+/**
+ * Success rate = solved / (solved + attempted), as a ratio in [0, 1].
+ * `null` when there's no attempted-or-solved activity at all (solved +
+ * attempted === 0) — avoids returning NaN for a meaningless 0/0.
+ * `unattempted`/`total` are irrelevant here and intentionally ignored.
+ */
+export function getSuccessRate(stats: ProblemStats): number | null {
+  const denominator = stats.solved + stats.attempted;
+  if (denominator === 0) return null;
+  return stats.solved / denominator;
+}

@@ -13,6 +13,7 @@ import "./statusSelect.test";
 import "./randomProblemDisplay.test";
 import "./tagsInput.test";
 import "./getRatingDistribution.test";
+import "./getSuccessRate.test";
 import { run } from "./testKit";
 
 await run();

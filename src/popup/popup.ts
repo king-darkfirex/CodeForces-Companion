@@ -13,7 +13,7 @@ import {
   deserializeStatusMap,
 } from "../messaging/protocol";
 import { createExclusiveRunner, AlreadyRunningError } from "../util/exclusiveTask";
-import { getProblems, getProblemStats, getRatingDistribution, RATING_BUCKET_LABELS } from "../query/getProblems";
+import { getProblems, getProblemStats, getSuccessRate, getRatingDistribution, RATING_BUCKET_LABELS } from "../query/getProblems";
 import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
 import { parseTagsInput } from "./tagsInput";
@@ -41,11 +41,13 @@ function setBusy(busy: boolean) {
 function renderStats(problems: Problem[], statusMap: StatusMap) {
   const statsEl = $<HTMLPreElement>("stats");
   const stats = getProblemStats(problems, statusMap);
+  const successRate = getSuccessRate(stats);
   statsEl.textContent = [
     `Total: ${stats.total}`,
     `Solved: ${stats.solved}`,
     `Attempted: ${stats.attempted}`,
     `Unattempted: ${stats.unattempted}`,
+    `Success rate: ${successRate === null ? "N/A" : `${Math.round(successRate * 1000) / 10}%`}`,
   ].join("\n");
 }
 

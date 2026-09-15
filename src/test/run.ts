@@ -14,6 +14,7 @@ import "./randomProblemDisplay.test";
 import "./tagsInput.test";
 import "./getRatingDistribution.test";
 import "./getSuccessRate.test";
+import "./formatRelativeTime.test";
 import { run } from "./testKit";
 
 await run();

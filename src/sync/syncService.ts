@@ -78,6 +78,9 @@ export async function ensureUserData(rawHandle: string, opts: { force?: boolean 
   const age = lastSync ? Date.now() - lastSync : Infinity;
 
   if (!opts.force && cachedSubs && cachedProfile && lastSync !== undefined && age < USER_TTL_MS) {
+    if (meta.lastUsedHandle !== handle) {
+      await writeMeta({ ...meta, lastUsedHandle: handle });
+    }
     return {
       profile: cachedProfile,
       submissions: cachedSubs,
@@ -107,6 +110,7 @@ export async function ensureUserData(rawHandle: string, opts: { force?: boolean 
     ...meta,
     lastUserSyncAt: { ...meta.lastUserSyncAt, [handle]: syncedAt },
     latestSubmissionId: { ...meta.latestSubmissionId, [handle]: latestSubmissionId(merged) },
+    lastUsedHandle: handle,
   });
 
   return { profile, submissions: merged, statusMap: classifySubmissions(merged), fromCache: false, syncedAt };
@@ -125,4 +129,46 @@ function latestSubmissionId(submissions: Submission[]): number {
   let max = 0;
   for (const s of submissions) if (s.id > max) max = s.id;
   return max;
+}
+
+export interface CachedRestoreState {
+  problems: Problem[];
+  profile: CFUserProfile;
+  statusMap: StatusMap;
+  problemsetSyncedAt: number;
+  userSyncedAt: number;
+}
+
+/**
+ * Reads whatever is already cached for the most-recently-used handle, with
+ * NO network calls and NO TTL checks — this is intentionally not
+ * `ensureProblemset`/`ensureUserData` with a short-circuit; it's a pure
+ * "what do we already have" peek, used only to rehydrate the popup UI on
+ * open. Returns `null` if there's no recorded handle yet, or if any of the
+ * required pieces (problemset, submissions, profile, their sync
+ * timestamps) aren't fully present — in which case the popup simply shows
+ * its normal empty state and waits for an explicit Sync, exactly as before
+ * this existed.
+ */
+export async function peekCachedState(): Promise<CachedRestoreState | null> {
+  const meta = await readMeta();
+  const handle = meta.lastUsedHandle ?? null;
+  if (!handle) return null;
+
+  const problems = await readProblemset();
+  const submissions = await readSubmissions(handle);
+  const profile = await readUserProfile(handle);
+  if (!problems || !submissions || !profile) return null;
+
+  const problemsetSyncedAt = meta.lastProblemsetSyncAt;
+  const userSyncedAt = meta.lastUserSyncAt[handle];
+  if (problemsetSyncedAt === null || userSyncedAt === undefined) return null;
+
+  return {
+    problems,
+    profile,
+    statusMap: classifySubmissions(submissions),
+    problemsetSyncedAt,
+    userSyncedAt,
+  };
 }

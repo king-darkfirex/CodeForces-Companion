@@ -10,6 +10,7 @@ import {
   ExtensionResponse,
   SyncProblemsetResponseData,
   SyncUserResponseData,
+  PeekCachedStateResponseData,
   deserializeStatusMap,
 } from "../messaging/protocol";
 import { createExclusiveRunner, AlreadyRunningError } from "../util/exclusiveTask";
@@ -18,6 +19,7 @@ import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
 import { parseTagsInput } from "./tagsInput";
 import { formatRandomProblemDisplay } from "./randomProblemDisplay";
+import { formatRelativeTime } from "./formatRelativeTime";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const output = $<HTMLPreElement>("output");
@@ -100,7 +102,7 @@ async function syncAll(force: boolean): Promise<void> {
     return;
   }
 
-  const { problems, fromCache: problemsFromCache } = problemsetRes.data;
+  const { problems, fromCache: problemsFromCache, syncedAt } = problemsetRes.data;
   const { profile, statusMap: serializedStatusMap, fromCache: userFromCache } = userRes.data;
 
   // The background worker sent statusMap as an array of [key, summary]
@@ -119,6 +121,7 @@ async function syncAll(force: boolean): Promise<void> {
       `Handle: ${profile.handle} (rating: ${profile.rating ?? "unrated"})`,
       `Problemset: ${problems.length} problems ${problemsFromCache ? "(cache)" : "(fetched)"}`,
       `Submissions: ${userFromCache ? "(cache)" : "(fetched)"}`,
+      `Last synced: ${formatRelativeTime(Date.now() - syncedAt)}`,
     ].join("\n")
   );
 }
@@ -253,3 +256,42 @@ $("sync").addEventListener("click", () => void handleSyncClick(false));
 $("refresh").addEventListener("click", () => void handleSyncClick(true));
 $("query").addEventListener("click", runRangeQuery);
 $("random").addEventListener("click", showRandomProblem);
+
+/**
+ * Runs once when the popup opens. Reuses the exact same cache the
+ * Sync/Force-refresh flow already populates — no new persistence layer,
+ * no network call, no TTL check (see `peekCachedState()` in
+ * `sync/syncService.ts`). If nothing's cached yet, this is a no-op and the
+ * popup just shows its normal empty-state placeholders, exactly as before
+ * this existed.
+ */
+async function restoreFromCache(): Promise<void> {
+  try {
+    const res = await sendMessage<PeekCachedStateResponseData | null>({ type: "PEEK_CACHED_STATE" });
+    if (!res.ok || !res.data) return;
+
+    const { problems, profile, statusMap: serializedStatusMap, problemsetSyncedAt, userSyncedAt } = res.data;
+    const statusMap = deserializeStatusMap(serializedStatusMap);
+
+    $<HTMLInputElement>("handle").value = profile.handle;
+    lastState = { problems, statusMap };
+    renderStats(problems, statusMap);
+    renderRatingDistribution(problems);
+
+    const mostRecentSync = Math.max(problemsetSyncedAt, userSyncedAt);
+    print(
+      [
+        `Handle: ${profile.handle} (rating: ${profile.rating ?? "unrated"})`,
+        `Problemset: ${problems.length} problems (restored from cache)`,
+        `Submissions: (restored from cache)`,
+        `Last synced: ${formatRelativeTime(Date.now() - mostRecentSync)}`,
+      ].join("\n")
+    );
+  } catch {
+    // Restoration is a convenience, not a requirement — if anything goes
+    // wrong here, silently fall back to the normal empty state rather than
+    // surfacing an error for something the user didn't explicitly ask for.
+  }
+}
+
+void restoreFromCache();

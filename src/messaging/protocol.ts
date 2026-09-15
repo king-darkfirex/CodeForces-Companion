@@ -51,7 +51,8 @@ export function deserializeStatusMap(entries: SerializedStatusMap): StatusMap {
 
 export type ExtensionRequest =
   | { type: "SYNC_PROBLEMSET"; force?: boolean }
-  | { type: "SYNC_USER"; handle: string; force?: boolean };
+  | { type: "SYNC_USER"; handle: string; force?: boolean }
+  | { type: "PEEK_CACHED_STATE" };
 
 // ---------------------------------------------------------------------------
 // Response payloads: background -> popup
@@ -74,6 +75,19 @@ export interface SyncUserResponseData {
   statusMap: SerializedStatusMap;
   fromCache: boolean;
   syncedAt: number;
+}
+
+/**
+ * Response for `PEEK_CACHED_STATE` — `null` when there's nothing valid to
+ * restore yet (no prior successful sync), in which case the popup just
+ * shows its normal empty state.
+ */
+export interface PeekCachedStateResponseData {
+  problems: Problem[];
+  profile: CFUserProfile;
+  statusMap: SerializedStatusMap;
+  problemsetSyncedAt: number;
+  userSyncedAt: number;
 }
 
 export interface ExtensionErrorPayload {

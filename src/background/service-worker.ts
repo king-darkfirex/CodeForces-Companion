@@ -2,18 +2,19 @@
 // `chrome` as `any` instead of depending on @types/chrome.
 declare const chrome: any;
 
-import { ensureProblemset, ensureUserData } from "../sync/syncService";
+import { ensureProblemset, ensureUserData, peekCachedState } from "../sync/syncService";
 import {
   ExtensionRequest,
   ExtensionResponse,
   SyncProblemsetResponseData,
   SyncUserResponseData,
+  PeekCachedStateResponseData,
   serializeStatusMap,
 } from "../messaging/protocol";
 
 async function handleMessage(
   message: ExtensionRequest
-): Promise<SyncProblemsetResponseData | SyncUserResponseData> {
+): Promise<SyncProblemsetResponseData | SyncUserResponseData | PeekCachedStateResponseData | null> {
   switch (message.type) {
     case "SYNC_PROBLEMSET": {
       // {problems, fromCache, syncedAt} is already JSON-safe as-is.
@@ -31,6 +32,20 @@ async function handleMessage(
         syncedAt: result.syncedAt,
       };
     }
+    case "PEEK_CACHED_STATE": {
+      // Network-free, TTL-free read of whatever's already cached — see
+      // peekCachedState()'s own doc comment. Returns null when there's
+      // nothing valid to restore yet.
+      const cached = await peekCachedState();
+      if (!cached) return null;
+      return {
+        problems: cached.problems,
+        profile: cached.profile,
+        statusMap: serializeStatusMap(cached.statusMap),
+        problemsetSyncedAt: cached.problemsetSyncedAt,
+        userSyncedAt: cached.userSyncedAt,
+      };
+    }
     default: {
       const exhaustiveCheck: never = message;
       throw new Error(`Unknown message type: ${JSON.stringify(exhaustiveCheck)}`);
@@ -42,7 +57,9 @@ chrome.runtime.onMessage.addListener(
   (
     message: ExtensionRequest,
     _sender: unknown,
-    sendResponse: (response: ExtensionResponse<SyncProblemsetResponseData | SyncUserResponseData>) => void
+    sendResponse: (
+      response: ExtensionResponse<SyncProblemsetResponseData | SyncUserResponseData | PeekCachedStateResponseData | null>
+    ) => void
   ) => {
     handleMessage(message)
       .then((data) => sendResponse({ ok: true, data }))

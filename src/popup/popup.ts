@@ -14,7 +14,13 @@ import {
   deserializeStatusMap,
 } from "../messaging/protocol";
 import { createExclusiveRunner, AlreadyRunningError } from "../util/exclusiveTask";
-import { getProblems, getProblemStats, getSuccessRate, getRatingDistribution, RATING_BUCKET_LABELS } from "../query/getProblems";
+import {
+  getProblems,
+  getProblemStats,
+  getSuccessRate,
+  getRatingDistribution,
+  RATING_DISTRIBUTION_LABELS,
+} from "../query/getProblems";
 import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
 import { parseTagsInput } from "./tagsInput";
@@ -62,7 +68,9 @@ function renderStats(problems: Problem[], statusMap: StatusMap) {
 function renderRatingDistribution(problems: Problem[]) {
   const distributionEl = $<HTMLPreElement>("ratingDistribution");
   const distribution = getRatingDistribution(problems);
-  distributionEl.textContent = RATING_BUCKET_LABELS.map((label) => `${label}: ${distribution[label]}`).join("\n");
+  distributionEl.textContent = RATING_DISTRIBUTION_LABELS.map((label) => `${label}: ${distribution[label]}`).join(
+    "\n"
+  );
 }
 
 function sendMessage<T>(message: ExtensionRequest): Promise<ExtensionResponse<T>> {

@@ -44,57 +44,54 @@ export function getProblems(problems: Problem[], statusMap: StatusMap, filters: 
   });
 }
 
-/** Fixed Codeforces rating buckets, in display order. Unrated problems (rating: null) always go to "Unrated". */
-export const RATING_BUCKET_LABELS = [
-  "< 800",
-  "800–999",
-  "1000–1199",
-  "1200–1399",
-  "1400–1599",
-  "1600–1799",
-  "1800–1999",
-  "2000–2199",
-  "2200–2399",
-  "2400–2599",
-  "2600–2799",
-  "2800–2999",
-  "3000+",
-  "Unrated",
+/** Discrete 100-point Codeforces rating levels, 800 through 3500 inclusive. */
+export const RATING_LEVELS = [
+  800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000, 2100, 2200, 2300, 2400, 2500, 2600,
+  2700, 2800, 2900, 3000, 3100, 3200, 3300, 3400, 3500,
 ] as const;
 
-export type RatingBucketLabel = (typeof RATING_BUCKET_LABELS)[number];
+export type RatingLevel = (typeof RATING_LEVELS)[number];
 
-export type RatingDistribution = Record<RatingBucketLabel, number>;
+/** One label per rating level ("800", "900", ..., "3500"), plus "Unrated". */
+export type RatingDistributionLabel = `${RatingLevel}` | "Unrated";
 
-function bucketForRating(rating: number | null): RatingBucketLabel {
-  if (rating === null) return "Unrated";
-  if (rating < 800) return "< 800";
-  if (rating < 1000) return "800–999";
-  if (rating < 1200) return "1000–1199";
-  if (rating < 1400) return "1200–1399";
-  if (rating < 1600) return "1400–1599";
-  if (rating < 1800) return "1600–1799";
-  if (rating < 2000) return "1800–1999";
-  if (rating < 2200) return "2000–2199";
-  if (rating < 2400) return "2200–2399";
-  if (rating < 2600) return "2400–2599";
-  if (rating < 2800) return "2600–2799";
-  if (rating < 3000) return "2800–2999";
-  return "3000+";
+/** RATING_DISTRIBUTION_LABELS, in display order (ascending levels, then "Unrated" last). */
+export const RATING_DISTRIBUTION_LABELS: readonly RatingDistributionLabel[] = [
+  ...RATING_LEVELS.map((level): RatingDistributionLabel => `${level}`),
+  "Unrated",
+];
+
+export type RatingDistribution = Record<RatingDistributionLabel, number>;
+
+/**
+ * Maps a numeric rating to its 100-point level label. Real Codeforces
+ * problem ratings are always exact multiples of 100 within [800, 3500], so
+ * this is normally an identity mapping (e.g. 1300 -> "1300"). A rating
+ * outside that range, or not a multiple of 100, shouldn't occur in normal
+ * data — but rather than dropping it (breaking the "every problem counted
+ * exactly once" invariant) or throwing, it's clamped into [800, 3500] and
+ * rounded down to the nearest level.
+ */
+function levelLabelForRating(rating: number): RatingDistributionLabel {
+  const clamped = Math.min(3500, Math.max(800, rating));
+  const level = Math.floor(clamped / 100) * 100;
+  return `${level}` as RatingDistributionLabel;
 }
 
 /**
- * Counts `problems` into fixed rating buckets. Does not use solved/attempted/
- * unattempted status at all — purely a function of `Problem.rating`. Every
- * problem belongs to exactly one bucket; unrated problems go to "Unrated"
- * rather than being dropped. Does not mutate `problems`.
+ * Counts `problems` into fixed 100-point rating levels (800, 900, ..., 3500)
+ * plus a separate "Unrated" count. Does not use solved/attempted/unattempted
+ * status at all — purely a function of `Problem.rating`. Every problem
+ * belongs to exactly one label; unrated problems go to "Unrated" rather than
+ * being dropped. Does not mutate `problems`.
  */
 export function getRatingDistribution(problems: Problem[]): RatingDistribution {
   const distribution = {} as RatingDistribution;
-  for (const label of RATING_BUCKET_LABELS) distribution[label] = 0;
+  for (const label of RATING_DISTRIBUTION_LABELS) distribution[label] = 0;
 
   for (const problem of problems) {
-    distribution[bucketForRating(problem.rating)] += 1;
+    const label = problem.rating === null ? "Unrated" : levelLabelForRating(problem.rating);
+    distribution[label] += 1;
   }
 
   return distribution;

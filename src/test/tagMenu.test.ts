@@ -1,6 +1,11 @@
 import { test, assertEqual } from "./testKit";
-import { collectAllTags, toggleTagInInput, addRecentTags } from "../popup/tagMenu";
+import { collectAllTags, toggleTagInInput, addRecentTags, isOutsideTagMenu, ClickContainer } from "../popup/tagMenu";
 import { Problem } from "../types/problem";
+
+/** A minimal stand-in for an HTMLElement's `.contains()`, so this menu-closing logic can be tested with no DOM. */
+function fakeContainer(childNodes: unknown[] = []): ClickContainer {
+  return { contains: (node) => childNodes.includes(node) };
+}
 
 function makeProblem(overrides: Partial<Problem>): Problem {
   return {
@@ -83,4 +88,38 @@ test("addRecentTags de-duplicates a tag that was already in the recent list", ()
 
 test("addRecentTags caps the list at the given max length", () => {
   assertEqual(addRecentTags(["a", "b", "c"], ["d"], 3), ["d", "a", "b"]);
+});
+
+// --- isOutsideTagMenu ---------------------------------------------------------
+//
+// Regression coverage for a bug where clicking into the manual tags input
+// while the menu was open closed the menu on that same click (because the
+// input wasn't recognized as part of the tags control), making it
+// impossible to use manual typing and the menu together.
+
+test("isOutsideTagMenu is false for a click on the toggle button", () => {
+  const tagMenu = fakeContainer();
+  const toggle = fakeContainer();
+  const tagsInput = {};
+  assertEqual(isOutsideTagMenu(toggle, tagMenu, toggle, tagsInput), false);
+});
+
+test("isOutsideTagMenu is false for a click inside the menu", () => {
+  const chip = {};
+  const tagMenu = fakeContainer([chip]);
+  assertEqual(isOutsideTagMenu(chip, tagMenu, fakeContainer(), {}), false);
+});
+
+test("isOutsideTagMenu is false for a click on the manual tags input (the fix)", () => {
+  const tagsInput = {};
+  const tagMenu = fakeContainer();
+  const tagMenuToggle = fakeContainer();
+  assertEqual(isOutsideTagMenu(tagsInput, tagMenu, tagMenuToggle, tagsInput), false);
+});
+
+test("isOutsideTagMenu is true for a click elsewhere on the page", () => {
+  const elsewhere = {};
+  const tagMenu = fakeContainer();
+  const tagMenuToggle = fakeContainer();
+  assertEqual(isOutsideTagMenu(elsewhere, tagMenu, tagMenuToggle, {}), true);
 });

@@ -2,160 +2,531 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>CF Companion — Phase 1 Debug</title>
+    <title>Codeforces Companion</title>
     <style>
+      :root {
+        --ink: #1f2937;
+        --ink-muted: #6b7280;
+        --surface: #ffffff;
+        --bg: #f1f5f9;
+        --border: #e2e8f0;
+        --accent: #38bdf8;
+        --accent-dark: #0369a1;
+        --accent-dark-hover: #075985;
+        --accent-soft-bg: #e0f2fe;
+        --accent-soft-border: #bae6fd;
+        --success: #15803d;
+        --warning: #b45309;
+        --neutral: #64748b;
+        --radius: 10px;
+        --radius-sm: 7px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        width: 340px;
-        padding: 12px;
-        color: #1c1c1c;
+        width: 380px;
+        margin: 0;
+        padding: 14px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13px;
+        line-height: 1.4;
       }
-      h1 {
-        font-size: 14px;
-        margin: 0 0 8px;
+
+      .app {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
-      .note {
+
+      /* Header */
+      .app-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 2px 2px 4px;
+      }
+
+      .brand-mark {
+        flex: 0 0 auto;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: var(--ink);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.01em;
+      }
+
+      .app-header h1 {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.2;
+      }
+
+      .tagline {
         font-size: 11px;
-        color: #888;
-        margin-bottom: 12px;
+        color: var(--ink-muted);
+        margin: 2px 0 0;
       }
+
+      /* Panels */
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 13px;
+      }
+
+      .panel h2 {
+        font-size: 12.5px;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--ink);
+      }
+
+      /* Form controls */
       label {
         display: block;
-        font-size: 12px;
-        margin-top: 8px;
-        margin-bottom: 2px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--ink-muted);
+        margin: 0 0 4px;
       }
-      input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 4px 6px;
-        font-size: 13px;
-      }
+
+      input,
       select {
         width: 100%;
         box-sizing: border-box;
-        padding: 4px 6px;
-        font-size: 13px;
-        margin-top: 8px;
+        padding: 6px 8px;
+        font-size: 12.5px;
+        font-family: inherit;
+        color: var(--ink);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
       }
-      button {
-        margin-top: 8px;
-        padding: 6px 10px;
-        font-size: 12px;
-        cursor: pointer;
+
+      input::placeholder {
+        color: #9ca3af;
       }
-      .row {
+
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+      }
+
+      select {
+        margin-top: 0;
+      }
+
+      .field-row {
         display: flex;
-        gap: 6px;
+        gap: 8px;
       }
-      .row input {
+
+      .field-row > div {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .field-row + label {
+        margin-top: 10px;
+      }
+
+      label + .field-row {
+        margin-top: 0;
+      }
+
+      .tags-row {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+      }
+
+      .tags-row input {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .tags-row button {
+        flex: 0 0 auto;
+      }
+
+      select + label,
+      .tags-row + label {
+        margin-top: 10px;
+      }
+
+      /* Buttons */
+      .btn {
+        appearance: none;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        padding: 7px 12px;
+        font-size: 12.5px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      }
+
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: var(--accent-dark);
+        color: #ffffff;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: var(--accent-dark-hover);
+      }
+
+      .btn-secondary {
+        background: var(--accent-soft-bg);
+        color: var(--accent-dark);
+        border-color: var(--accent-soft-border);
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: var(--accent-soft-border);
+      }
+
+      .btn-ghost {
+        background: var(--surface);
+        color: var(--ink);
+        border-color: var(--border);
+      }
+
+      .btn-ghost:hover:not(:disabled) {
+        background: var(--bg);
+      }
+
+      .btn-block {
+        width: 100%;
+        margin-top: 10px;
+      }
+
+      .button-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .button-row .btn {
         flex: 1;
       }
-      pre {
-        background: #f5f5f5;
-        padding: 8px;
+
+      /* Status / output readout (shared between sync status and count-query results) */
+      .status-readout {
+        margin: 10px 0 0;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 8px 9px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 11px;
+        color: var(--ink);
         white-space: pre-wrap;
         word-break: break-word;
-        max-height: 220px;
+        max-height: 190px;
         overflow: auto;
       }
-      .random-result {
-        margin-top: 8px;
-        font-size: 12px;
+
+      .empty-state {
+        margin: 0;
+        font-size: 11.5px;
+        color: var(--ink-muted);
       }
-      .random-result a {
-        color: #1a73e8;
+
+      /* Problem stats */
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
       }
-      .tag-menu {
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        padding: 6px;
-        margin-top: 4px;
-        max-height: 160px;
-        overflow: auto;
+
+      .stat-cell {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 4px;
+        text-align: center;
       }
-      .tag-menu-heading {
+
+      .stat-value {
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--ink);
+      }
+
+      .stat-cell--solved .stat-value {
+        color: var(--success);
+      }
+
+      .stat-cell--attempted .stat-value {
+        color: var(--warning);
+      }
+
+      .stat-cell--unattempted .stat-value {
+        color: var(--neutral);
+      }
+
+      .stat-label {
+        font-size: 9.5px;
+        color: var(--ink-muted);
+        margin-top: 3px;
+      }
+
+      .success-rate {
+        margin-top: 10px;
+      }
+
+      .success-rate-row {
+        display: flex;
+        justify-content: space-between;
         font-size: 11px;
-        color: #888;
-        margin: 6px 0 2px;
+        color: var(--ink-muted);
+        margin-bottom: 4px;
       }
+
+      .success-rate-row strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .success-rate-track {
+        height: 6px;
+        border-radius: 999px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        overflow: hidden;
+      }
+
+      .success-rate-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: var(--success);
+      }
+
+      /* Rating distribution */
+      .rating-bars {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        max-height: 190px;
+        overflow-y: auto;
+        padding-right: 2px;
+      }
+
+      .rating-bar-row {
+        display: grid;
+        grid-template-columns: 40px 1fr 26px;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .rating-bar-label {
+        font-size: 10.5px;
+        color: var(--ink-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .rating-bar-track {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--bg);
+      }
+
+      .rating-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        background: var(--accent-dark);
+        min-width: 2px;
+      }
+
+      .rating-bar-fill.is-unrated {
+        background: var(--neutral);
+      }
+
+      .rating-bar-count {
+        font-size: 10.5px;
+        color: var(--ink);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* Tag selector */
+      .tag-menu {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--bg);
+        padding: 8px;
+        margin-top: 6px;
+        max-height: 150px;
+        overflow: auto;
+      }
+
+      .tag-menu-heading {
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--ink-muted);
+        margin: 7px 0 4px;
+      }
+
       .tag-menu-heading:first-child {
         margin-top: 0;
       }
+
       .tag-chip-list {
         display: flex;
         flex-wrap: wrap;
         gap: 4px;
       }
+
       .tag-chip-empty {
         font-size: 11px;
-        color: #aaa;
+        color: #9ca3af;
       }
+
       .tag-chip {
         font-size: 11px;
-        padding: 2px 8px;
-        border: 1px solid #ccc;
-        border-radius: 10px;
+        font-family: inherit;
+        padding: 3px 9px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
         cursor: pointer;
-        background: #fff;
+        background: var(--surface);
+        color: var(--ink);
+        transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
       }
+
+      .tag-chip:hover {
+        border-color: var(--accent);
+      }
+
       .tag-chip.selected {
-        background: #1a73e8;
-        color: #fff;
-        border-color: #1a73e8;
+        background: var(--accent-dark);
+        color: #ffffff;
+        border-color: var(--accent-dark);
+      }
+
+      /* Random problem */
+      .random-result {
+        margin-top: 10px;
+        font-size: 12px;
+      }
+
+      .random-result:not(:has(a)) {
+        color: var(--ink-muted);
+      }
+
+      .random-result a {
+        display: block;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--bg);
+        padding: 9px 10px;
+        color: var(--accent-dark);
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .random-result a:hover {
+        border-color: var(--accent);
+        text-decoration: underline;
       }
     </style>
   </head>
   <body>
-    <h1>CF Companion — Phase 1 Debug</h1>
-    <p class="note">
-      Temporary debug view for validating the data layer. The real dashboard/practice UI arrives in later phases.
-    </p>
+    <div class="app">
+      <header class="app-header">
+        <div class="brand-mark" aria-hidden="true">CF</div>
+        <div>
+          <h1>Codeforces Companion</h1>
+          <p class="tagline">Smarter practice from your solving history</p>
+        </div>
+      </header>
 
-    <label for="handle">Codeforces handle</label>
-    <input id="handle" type="text" placeholder="e.g. tourist" />
-    <button id="sync">Sync</button>
-    <button id="refresh">Force refresh</button>
+      <section class="panel">
+        <h2>Sync</h2>
+        <label for="handle">Codeforces handle</label>
+        <input id="handle" type="text" placeholder="e.g. tourist" />
+        <div class="button-row">
+          <button id="sync" class="btn btn-primary">Sync</button>
+          <button id="refresh" class="btn btn-ghost">Force refresh</button>
+        </div>
+        <pre id="output" class="status-readout">Enter your Codeforces handle and sync to get started.</pre>
+      </section>
 
-    <pre id="stats">No statistics yet — sync to see problem counts.</pre>
+      <section class="panel">
+        <h2>Problem stats</h2>
+        <div id="stats">
+          <p class="empty-state">Sync your handle to see problem counts.</p>
+        </div>
+      </section>
 
-    <pre id="ratingDistribution">No rating distribution yet — sync to see problem counts.</pre>
+      <section class="panel">
+        <h2>Rating distribution</h2>
+        <div id="ratingDistribution">
+          <p class="empty-state">Sync to see how your problems break down by rating.</p>
+        </div>
+      </section>
 
-    <div class="row">
-      <div>
-        <label for="minRating">Min rating</label>
-        <input id="minRating" type="number" value="1200" />
-      </div>
-      <div>
-        <label for="maxRating">Max rating</label>
-        <input id="maxRating" type="number" value="1400" />
-      </div>
+      <section class="panel">
+        <h2>Filters</h2>
+        <div class="field-row">
+          <div>
+            <label for="minRating">Min rating</label>
+            <input id="minRating" type="number" value="1200" />
+          </div>
+          <div>
+            <label for="maxRating">Max rating</label>
+            <input id="maxRating" type="number" value="1400" />
+          </div>
+        </div>
+        <label for="status">Status</label>
+        <select id="status">
+          <option value="all">All</option>
+          <option value="solved">Solved</option>
+          <option value="attempted">Attempted</option>
+          <option value="unattempted" selected>Unattempted</option>
+        </select>
+        <label for="tags">Tags (comma-separated)</label>
+        <div class="tags-row">
+          <input id="tags" type="text" placeholder="e.g. dp, greedy" />
+          <button id="tagMenuToggle" type="button" class="btn btn-ghost">Tags ▾</button>
+        </div>
+        <div id="tagMenu" class="tag-menu" hidden>
+          <div class="tag-menu-heading">Recent tags</div>
+          <div id="recentTagsList" class="tag-chip-list"></div>
+          <div class="tag-menu-heading">All tags</div>
+          <div id="allTagsList" class="tag-chip-list"></div>
+        </div>
+        <button id="query" class="btn btn-secondary btn-block">Count problems in range</button>
+      </section>
+
+      <section class="panel">
+        <h2>Random problem</h2>
+        <button id="random" class="btn btn-primary btn-block">Random Problem</button>
+        <div id="randomResult" class="random-result">Run a random pick to see a suggested problem here.</div>
+      </section>
     </div>
-    <label for="status">Status</label>
-    <select id="status">
-      <option value="all">All</option>
-      <option value="solved">Solved</option>
-      <option value="attempted">Attempted</option>
-      <option value="unattempted" selected>Unattempted</option>
-    </select>
-    <label for="tags">Tags (comma-separated)</label>
-    <div class="row">
-      <input id="tags" type="text" placeholder="e.g. dp, greedy" />
-      <button id="tagMenuToggle" type="button">Tags ▾</button>
-    </div>
-    <div id="tagMenu" class="tag-menu" hidden>
-      <div class="tag-menu-heading">Recent tags</div>
-      <div id="recentTagsList" class="tag-chip-list"></div>
-      <div class="tag-menu-heading">All tags</div>
-      <div id="allTagsList" class="tag-chip-list"></div>
-    </div>
-    <button id="query">Count problems in range</button>
-
-    <button id="random">Random Problem</button>
-    <div id="randomResult" class="random-result"></div>
-
-    <pre id="output">Enter your Codeforces handle to start analyzing your solving history.</pre>
 
     <script type="module" src="./popup.ts"></script>
   </body>

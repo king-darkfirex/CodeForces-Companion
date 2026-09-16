@@ -35,3 +35,28 @@ export function addRecentTags(existing: string[], tags: string[], max = 8): stri
   const merged = [...tags, ...existing.filter((t) => !tags.includes(t))];
   return merged.slice(0, max);
 }
+
+/** The subset of an HTMLElement's API `isOutsideTagMenu` needs — kept minimal so it's easy to test without a DOM. */
+export interface ClickContainer {
+  contains(node: unknown): boolean;
+}
+
+/**
+ * Decides whether a click on `target` should close the open tag menu. The
+ * click counts as "inside" the tags control — and must NOT close the menu —
+ * if it lands on the toggle button, inside the menu itself, or in the
+ * manual tags input: typing into that input is using the same control as
+ * the menu, not clicking away from it. Without excluding the input, opening
+ * the menu and then clicking into the field to type manually would close
+ * the menu on that very click, making the two impossible to use together.
+ */
+export function isOutsideTagMenu(
+  target: unknown,
+  tagMenu: ClickContainer,
+  tagMenuToggle: ClickContainer,
+  tagsInput: unknown
+): boolean {
+  return (
+    target !== tagMenuToggle && target !== tagsInput && !tagMenu.contains(target) && !tagMenuToggle.contains(target)
+  );
+}

@@ -1,6 +1,6 @@
-// This is a deliberately bare-bones debug harness for Phase 1 — it exists
-// so the data layer can be exercised by hand inside a real unpacked Chrome
-// extension, not to be a preview of the eventual UI (that's Phase 3+).
+// The popup UI for Codeforces Companion: sync your Codeforces handle, see
+// your solved/attempted stats and rating distribution, filter the
+// problemset, and get a random problem suggestion.
 declare const chrome: any;
 
 import { Problem } from "../types/problem";
@@ -24,16 +24,30 @@ import {
 import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
 import { parseTagsInput } from "./tagsInput";
-import { collectAllTags, toggleTagInInput, addRecentTags } from "./tagMenu";
+import { collectAllTags, toggleTagInInput, addRecentTags, isOutsideTagMenu } from "./tagMenu";
 import { formatRandomProblemDisplay } from "./randomProblemDisplay";
 import { formatRelativeTime } from "./formatRelativeTime";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const output = $<HTMLPreElement>("output");
+const randomResultEl = $<HTMLDivElement>("randomResult");
 const actionButtons = ["sync", "refresh", "query", "random"].map((id) => $<HTMLButtonElement>(id));
 
 function print(text: string) {
   output.textContent = text;
+}
+
+const RANDOM_RESULT_PLACEHOLDER = "Run a random pick to see a suggested problem here.";
+
+/**
+ * Resets the Random Problem result to its placeholder. Called whenever the
+ * filters that fed it (rating range, status, tags) or the underlying synced
+ * data change, so a stale result — for a filter combination or dataset
+ * that's no longer current — never lingers on screen looking like it still
+ * applies.
+ */
+function invalidateRandomResult() {
+  randomResultEl.textContent = RANDOM_RESULT_PLACEHOLDER;
 }
 
 function setBusy(busy: boolean) {
@@ -45,32 +59,98 @@ function setBusy(busy: boolean) {
  * so the statistics numbers are never computed more than once. Called after
  * every successful sync, whether that sync came from a fresh fetch or from
  * cache (`syncAll` doesn't branch differently between the two, so this
- * naturally covers both).
+ * naturally covers both). Builds a small stat grid + success-rate bar;
+ * `getProblemStats`/`getSuccessRate` themselves are untouched.
  */
 function renderStats(problems: Problem[], statusMap: StatusMap) {
-  const statsEl = $<HTMLPreElement>("stats");
+  const statsEl = $<HTMLDivElement>("stats");
   const stats = getProblemStats(problems, statusMap);
   const successRate = getSuccessRate(stats);
-  statsEl.textContent = [
-    `Total: ${stats.total}`,
-    `Solved: ${stats.solved}`,
-    `Attempted: ${stats.attempted}`,
-    `Unattempted: ${stats.unattempted}`,
-    `Success rate: ${successRate === null ? "N/A" : `${Math.round(successRate * 1000) / 10}%`}`,
-  ].join("\n");
+  const successRatePercent = successRate === null ? null : Math.round(successRate * 1000) / 10;
+
+  statsEl.textContent = "";
+
+  const grid = document.createElement("div");
+  grid.className = "stat-grid";
+  const cells: Array<[string, number, string]> = [
+    ["Total", stats.total, ""],
+    ["Solved", stats.solved, "stat-cell--solved"],
+    ["Attempted", stats.attempted, "stat-cell--attempted"],
+    ["Unattempted", stats.unattempted, "stat-cell--unattempted"],
+  ];
+  for (const [label, value, modifierClass] of cells) {
+    const cell = document.createElement("div");
+    cell.className = "stat-cell" + (modifierClass ? ` ${modifierClass}` : "");
+    const valueEl = document.createElement("div");
+    valueEl.className = "stat-value";
+    valueEl.textContent = String(value);
+    const labelEl = document.createElement("div");
+    labelEl.className = "stat-label";
+    labelEl.textContent = label;
+    cell.append(valueEl, labelEl);
+    grid.appendChild(cell);
+  }
+  statsEl.appendChild(grid);
+
+  const successRateEl = document.createElement("div");
+  successRateEl.className = "success-rate";
+  const row = document.createElement("div");
+  row.className = "success-rate-row";
+  const rowLabel = document.createElement("span");
+  rowLabel.textContent = "Success rate";
+  const rowValue = document.createElement("strong");
+  rowValue.textContent = successRatePercent === null ? "N/A" : `${successRatePercent}%`;
+  row.append(rowLabel, rowValue);
+  const track = document.createElement("div");
+  track.className = "success-rate-track";
+  const fill = document.createElement("div");
+  fill.className = "success-rate-fill";
+  fill.style.width = `${successRatePercent ?? 0}%`;
+  track.appendChild(fill);
+  successRateEl.append(row, track);
+  statsEl.appendChild(successRateEl);
 }
 
 /**
  * The only place that reads `getRatingDistribution()` and writes it to the
  * DOM, mirroring `renderStats` above. Does not use `statusMap` at all, since
  * `getRatingDistribution` is purely a function of each problem's rating.
+ * Renders one bar per label, its width scaled relative to whichever label
+ * has the highest count; `getRatingDistribution`/`RATING_DISTRIBUTION_LABELS`
+ * themselves are untouched.
  */
 function renderRatingDistribution(problems: Problem[]) {
-  const distributionEl = $<HTMLPreElement>("ratingDistribution");
+  const distributionEl = $<HTMLDivElement>("ratingDistribution");
   const distribution = getRatingDistribution(problems);
-  distributionEl.textContent = RATING_DISTRIBUTION_LABELS.map((label) => `${label}: ${distribution[label]}`).join(
-    "\n"
-  );
+  const maxCount = Math.max(0, ...RATING_DISTRIBUTION_LABELS.map((label) => distribution[label]));
+
+  distributionEl.textContent = "";
+  const list = document.createElement("div");
+  list.className = "rating-bars";
+  for (const label of RATING_DISTRIBUTION_LABELS) {
+    const count = distribution[label];
+    const row = document.createElement("div");
+    row.className = "rating-bar-row";
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "rating-bar-label";
+    labelEl.textContent = label;
+
+    const track = document.createElement("div");
+    track.className = "rating-bar-track";
+    const fill = document.createElement("div");
+    fill.className = "rating-bar-fill" + (label === "Unrated" ? " is-unrated" : "");
+    fill.style.width = maxCount === 0 ? "0%" : `${(count / maxCount) * 100}%`;
+    track.appendChild(fill);
+
+    const countEl = document.createElement("span");
+    countEl.className = "rating-bar-count";
+    countEl.textContent = String(count);
+
+    row.append(labelEl, track, countEl);
+    list.appendChild(row);
+  }
+  distributionEl.appendChild(list);
 }
 
 function sendMessage<T>(message: ExtensionRequest): Promise<ExtensionResponse<T>> {
@@ -140,6 +220,7 @@ function renderTagChips(container: HTMLDivElement, tags: string[], selected: Set
       recentTags = addRecentTags(recentTags, [tag], RECENT_TAGS_MAX);
       saveRecentTags(recentTags);
       renderTagMenu();
+      invalidateRandomResult();
     });
     container.appendChild(chip);
   }
@@ -161,13 +242,20 @@ function setTagMenuOpen(open: boolean): void {
 tagMenuToggle.addEventListener("click", () => setTagMenuOpen(!!tagMenu.hidden));
 tagsInput.addEventListener("input", () => {
   if (!tagMenu.hidden) renderTagMenu();
+  invalidateRandomResult();
 });
 document.addEventListener("click", (e) => {
-  const target = e.target as Node;
-  if (!tagMenu.hidden && target !== tagMenuToggle && !tagMenu.contains(target) && !tagMenuToggle.contains(target)) {
+  if (!tagMenu.hidden && isOutsideTagMenu(e.target, tagMenu, tagMenuToggle, tagsInput)) {
     setTagMenuOpen(false);
   }
 });
+
+// The rating range and status controls are the other inputs that feed
+// `showRandomProblem` (alongside tags, handled above) — changing any of
+// them makes a previously-shown random result stale in the same way.
+$<HTMLInputElement>("minRating").addEventListener("input", invalidateRandomResult);
+$<HTMLInputElement>("maxRating").addEventListener("input", invalidateRandomResult);
+$<HTMLSelectElement>("status").addEventListener("change", invalidateRandomResult);
 
 // Ensures only one sync can be in flight at a time, and — critically — that
 // the "busy" state is always cleared afterward (success, handled failure,
@@ -178,7 +266,7 @@ const runExclusive = createExclusiveRunner();
 async function syncAll(force: boolean): Promise<void> {
   const handle = $<HTMLInputElement>("handle").value.trim();
   if (!handle) {
-    print("Enter your Codeforces handle to start analyzing your solving history.");
+    print("Enter your Codeforces handle and sync to get started.");
     return;
   }
 
@@ -210,6 +298,7 @@ async function syncAll(force: boolean): Promise<void> {
   renderStats(problems, statusMap);
   renderRatingDistribution(problems);
   if (!tagMenu.hidden) renderTagMenu();
+  invalidateRandomResult();
 
   print(
     [
@@ -313,7 +402,7 @@ function runRangeQuery() {
  * result and updates the DOM.
  */
 function showRandomProblem() {
-  const resultEl = $<HTMLDivElement>("randomResult");
+  const resultEl = randomResultEl;
   try {
     if (!lastState) {
       resultEl.textContent = "Sync first, then pick a random problem.";
@@ -381,6 +470,7 @@ async function restoreFromCache(): Promise<void> {
     renderStats(problems, statusMap);
     renderRatingDistribution(problems);
     if (!tagMenu.hidden) renderTagMenu();
+    invalidateRandomResult();
 
     const mostRecentSync = Math.max(problemsetSyncedAt, userSyncedAt);
     print(

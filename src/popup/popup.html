@@ -67,6 +67,44 @@
       .random-result a {
         color: #1a73e8;
       }
+      .tag-menu {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 6px;
+        margin-top: 4px;
+        max-height: 160px;
+        overflow: auto;
+      }
+      .tag-menu-heading {
+        font-size: 11px;
+        color: #888;
+        margin: 6px 0 2px;
+      }
+      .tag-menu-heading:first-child {
+        margin-top: 0;
+      }
+      .tag-chip-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .tag-chip-empty {
+        font-size: 11px;
+        color: #aaa;
+      }
+      .tag-chip {
+        font-size: 11px;
+        padding: 2px 8px;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        cursor: pointer;
+        background: #fff;
+      }
+      .tag-chip.selected {
+        background: #1a73e8;
+        color: #fff;
+        border-color: #1a73e8;
+      }
     </style>
   </head>
   <body>
@@ -102,7 +140,16 @@
       <option value="unattempted" selected>Unattempted</option>
     </select>
     <label for="tags">Tags (comma-separated)</label>
-    <input id="tags" type="text" placeholder="e.g. dp, greedy" />
+    <div class="row">
+      <input id="tags" type="text" placeholder="e.g. dp, greedy" />
+      <button id="tagMenuToggle" type="button">Tags ▾</button>
+    </div>
+    <div id="tagMenu" class="tag-menu" hidden>
+      <div class="tag-menu-heading">Recent tags</div>
+      <div id="recentTagsList" class="tag-chip-list"></div>
+      <div class="tag-menu-heading">All tags</div>
+      <div id="allTagsList" class="tag-chip-list"></div>
+    </div>
     <button id="query">Count problems in range</button>
 
     <button id="random">Random Problem</button>

@@ -18,6 +18,7 @@ import { getProblems, getProblemStats, getSuccessRate, getRatingDistribution, RA
 import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
 import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
 import { parseTagsInput } from "./tagsInput";
+import { collectAllTags, toggleTagInInput, addRecentTags } from "./tagMenu";
 import { formatRandomProblemDisplay } from "./randomProblemDisplay";
 import { formatRelativeTime } from "./formatRelativeTime";
 
@@ -75,6 +76,91 @@ interface SyncedState {
 
 let lastState: SyncedState | null = null;
 
+// --- Tag menu (clickable tag selector) ------------------------------------
+//
+// The menu is purely a convenience on top of the existing manual tags
+// input: clicking a chip just toggles that tag inside `#tags`' text value
+// (via `toggleTagInInput`), so the manual input and the menu always agree —
+// there's no separate "selected tags" state to keep in sync, and the
+// existing `parseTagsInput`/`getProblems` pipeline is untouched.
+const RECENT_TAGS_STORAGE_KEY = "cf-companion:recentTags";
+const RECENT_TAGS_MAX = 8;
+
+const tagsInput = $<HTMLInputElement>("tags");
+const tagMenu = $<HTMLDivElement>("tagMenu");
+const tagMenuToggle = $<HTMLButtonElement>("tagMenuToggle");
+const recentTagsList = $<HTMLDivElement>("recentTagsList");
+const allTagsList = $<HTMLDivElement>("allTagsList");
+
+function loadRecentTags(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_TAGS_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentTags(tags: string[]): void {
+  try {
+    localStorage.setItem(RECENT_TAGS_STORAGE_KEY, JSON.stringify(tags));
+  } catch {
+    // Recent tags are a convenience; failing to persist them (e.g. storage
+    // disabled) shouldn't break tag selection itself.
+  }
+}
+
+let recentTags: string[] = loadRecentTags();
+
+function renderTagChips(container: HTMLDivElement, tags: string[], selected: Set<string>, emptyMessage: string): void {
+  container.textContent = "";
+  if (tags.length === 0) {
+    const empty = document.createElement("span");
+    empty.className = "tag-chip-empty";
+    empty.textContent = emptyMessage;
+    container.appendChild(empty);
+    return;
+  }
+  for (const tag of tags) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "tag-chip" + (selected.has(tag) ? " selected" : "");
+    chip.textContent = tag;
+    chip.addEventListener("click", () => {
+      tagsInput.value = toggleTagInInput(tagsInput.value, tag);
+      recentTags = addRecentTags(recentTags, [tag], RECENT_TAGS_MAX);
+      saveRecentTags(recentTags);
+      renderTagMenu();
+    });
+    container.appendChild(chip);
+  }
+}
+
+/** Re-renders both "Recent tags" and "All tags" against the current input value and loaded problems. */
+function renderTagMenu(): void {
+  const selected = new Set(parseTagsInput(tagsInput.value));
+  const allTags = collectAllTags(lastState?.problems ?? []);
+  renderTagChips(recentTagsList, recentTags, selected, "No recent tags yet.");
+  renderTagChips(allTagsList, allTags, selected, "Sync to see available tags.");
+}
+
+function setTagMenuOpen(open: boolean): void {
+  tagMenu.hidden = !open;
+  if (open) renderTagMenu();
+}
+
+tagMenuToggle.addEventListener("click", () => setTagMenuOpen(!!tagMenu.hidden));
+tagsInput.addEventListener("input", () => {
+  if (!tagMenu.hidden) renderTagMenu();
+});
+document.addEventListener("click", (e) => {
+  const target = e.target as Node;
+  if (!tagMenu.hidden && target !== tagMenuToggle && !tagMenu.contains(target) && !tagMenuToggle.contains(target)) {
+    setTagMenuOpen(false);
+  }
+});
+
 // Ensures only one sync can be in flight at a time, and — critically — that
 // the "busy" state is always cleared afterward (success, handled failure,
 // or an unexpected exception), so the popup can never get permanently
@@ -115,6 +201,7 @@ async function syncAll(force: boolean): Promise<void> {
   lastState = { problems, statusMap };
   renderStats(problems, statusMap);
   renderRatingDistribution(problems);
+  if (!tagMenu.hidden) renderTagMenu();
 
   print(
     [
@@ -181,6 +268,10 @@ function runRangeQuery() {
     const statusValue = $<HTMLSelectElement>("status").value as StatusSelectValue;
     const status = statusFilterFromSelection(statusValue);
     const tags = parseTagsInput($<HTMLInputElement>("tags").value);
+    if (tags.length > 0) {
+      recentTags = addRecentTags(recentTags, tags, RECENT_TAGS_MAX);
+      saveRecentTags(recentTags);
+    }
 
     const matches = getProblems(lastState.problems, lastState.statusMap, {
       minRating: min,
@@ -226,6 +317,10 @@ function showRandomProblem() {
     const statusValue = $<HTMLSelectElement>("status").value as StatusSelectValue;
     const status = statusFilterFromSelection(statusValue); // "Any status" -> undefined -> no restriction
     const tags = parseTagsInput($<HTMLInputElement>("tags").value);
+    if (tags.length > 0) {
+      recentTags = addRecentTags(recentTags, tags, RECENT_TAGS_MAX);
+      saveRecentTags(recentTags);
+    }
 
     const problem = getRandomProblemByFilter(lastState.problems, lastState.statusMap, {
       minRating: min,
@@ -277,6 +372,7 @@ async function restoreFromCache(): Promise<void> {
     lastState = { problems, statusMap };
     renderStats(problems, statusMap);
     renderRatingDistribution(problems);
+    if (!tagMenu.hidden) renderTagMenu();
 
     const mostRecentSync = Math.max(problemsetSyncedAt, userSyncedAt);
     print(

@@ -34,7 +34,33 @@ const randomResultEl = $<HTMLDivElement>("randomResult");
 const actionButtons = ["sync", "refresh", "query", "random"].map((id) => $<HTMLButtonElement>(id));
 
 function print(text: string) {
+  output.classList.remove("status-readout--error");
   output.textContent = text;
+}
+
+/**
+ * Like `print()`, but styles #output as an error state and preserves the
+ * full technical error (name + message) in the console — so replacing the
+ * raw message shown to the user doesn't lose it for anyone debugging.
+ */
+function printSyncError(error: { name: string; message: string }) {
+  console.error("Codeforces sync failed:", error.name, error.message);
+  output.classList.add("status-readout--error");
+  output.textContent = friendlySyncErrorMessage(error);
+}
+
+/** Maps a raw sync error to a short, friendly message. Error *handling* is unchanged — this only changes what's displayed. */
+function friendlySyncErrorMessage(error: { name: string; message: string }): string {
+  switch (error.name) {
+    case "InvalidHandleError":
+      return "Couldn't find that Codeforces user.\nPlease check the handle and try again.";
+    case "RateLimitedError":
+      return "Codeforces is rate-limiting requests right now.\nPlease wait a moment and try again.";
+    case "NetworkError":
+      return "Couldn't reach Codeforces.\nPlease check your connection and try again.";
+    default:
+      return "Something went wrong while syncing with Codeforces.\nPlease try again.";
+  }
 }
 
 const RANDOM_RESULT_PLACEHOLDER = "Run a random pick to see a suggested problem here.";
@@ -151,6 +177,38 @@ function renderRatingDistribution(problems: Problem[]) {
     list.appendChild(row);
   }
   distributionEl.appendChild(list);
+}
+
+const STATS_EMPTY_MESSAGE = "Sync your handle to see problem counts.";
+const RATING_DISTRIBUTION_EMPTY_MESSAGE = "Sync to see how your problems break down by rating.";
+
+/**
+ * Resets every sync-dependent display back to its pre-sync appearance —
+ * stats, rating distribution, the random result, and the in-memory
+ * problem/status data itself. Called right when a new Sync/Force-refresh
+ * starts, so a previous user's results never remain visible (or queryable
+ * via Count/Random) through a sync that then fails, e.g. on an invalid
+ * handle.
+ */
+function clearSyncedDisplays(): void {
+  lastState = null;
+
+  const statsEl = $<HTMLDivElement>("stats");
+  statsEl.textContent = "";
+  const statsEmpty = document.createElement("p");
+  statsEmpty.className = "empty-state";
+  statsEmpty.textContent = STATS_EMPTY_MESSAGE;
+  statsEl.appendChild(statsEmpty);
+
+  const distributionEl = $<HTMLDivElement>("ratingDistribution");
+  distributionEl.textContent = "";
+  const distributionEmpty = document.createElement("p");
+  distributionEmpty.className = "empty-state";
+  distributionEmpty.textContent = RATING_DISTRIBUTION_EMPTY_MESSAGE;
+  distributionEl.appendChild(distributionEmpty);
+
+  invalidateRandomResult();
+  if (!tagMenu.hidden) renderTagMenu();
 }
 
 function sendMessage<T>(message: ExtensionRequest): Promise<ExtensionResponse<T>> {
@@ -270,17 +328,18 @@ async function syncAll(force: boolean): Promise<void> {
     return;
   }
 
+  clearSyncedDisplays();
   print("Syncing…");
 
   const problemsetRes = await sendMessage<SyncProblemsetResponseData>({ type: "SYNC_PROBLEMSET", force });
   if (!problemsetRes.ok) {
-    print(`Problemset sync failed: [${problemsetRes.error.name}] ${problemsetRes.error.message}`);
+    printSyncError(problemsetRes.error);
     return;
   }
 
   const userRes = await sendMessage<SyncUserResponseData>({ type: "SYNC_USER", handle, force });
   if (!userRes.ok) {
-    print(`User sync failed: [${userRes.error.name}] ${userRes.error.message}`);
+    printSyncError(userRes.error);
     return;
   }
 
@@ -349,7 +408,7 @@ async function handleSyncClick(force: boolean): Promise<void> {
       print("A sync is already in progress — please wait for it to finish.");
     } else {
       const e = err as { name?: string; message?: string };
-      print(`Unexpected error during sync: [${e?.name ?? "Error"}] ${e?.message ?? String(err)}`);
+      printSyncError({ name: e?.name ?? "Error", message: e?.message ?? String(err) });
     }
   }
 }

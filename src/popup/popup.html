@@ -18,6 +18,9 @@
         --accent-soft-border: #bfdbfe;
         --success: #15803d;
         --warning: #92400e;
+        --danger: #b91c1c;
+        --danger-soft-bg: #fef2f2;
+        --danger-soft-border: #fecaca;
         --radius: 10px;
         --radius-sm: 7px;
       }
@@ -151,6 +154,9 @@
       .tags-row input {
         flex: 1;
         min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .tags-row button {
@@ -238,6 +244,12 @@
         word-break: break-word;
         max-height: 190px;
         overflow: auto;
+      }
+
+      .status-readout--error {
+        background: var(--danger-soft-bg);
+        border-color: var(--danger-soft-border);
+        color: var(--danger);
       }
 
       .empty-state {

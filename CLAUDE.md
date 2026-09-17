@@ -77,7 +77,7 @@ message limit). Instead:
 
 ## Workspace Persistence Warning (read this)
 
-The sandboxed filesystem this project lives in (`/home/claude/cf-companion`) is **not
+The sandboxed filesystem this project lives in (`/home/claude/workspace/cf-companion`) is **not
 guaranteed to persist between separate conversation sessions**. Treat every session as
 potentially the last time this exact copy of the workspace exists. Practical implications:
 

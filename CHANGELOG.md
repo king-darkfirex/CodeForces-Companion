@@ -3,6 +3,68 @@
 Concise, chronological record of meaningful changes. Not every edit — only things worth a
 future session (or you) knowing happened.
 
+## Release: V1 complete
+
+**Type:** Consolidated release summary. The entries below this one are a session-by-session
+diary and remain accurate for what they individually describe, but the diary has gaps (noted
+in earlier entries, e.g. cache restoration and the last-synced display were never given their
+own changelog entry when originally built). This entry is the authoritative, concise record of
+what V1 actually ships, written by reading the current source directly rather than trusting
+the (previously very stale) `PROJECT_STATUS.md`/`ARCHITECTURE.md`.
+
+**Sync and data:**
+- Codeforces sync and caching (`sync/syncService.ts`, `chrome.storage.local`), with TTLs,
+  force-refresh, and incremental (stop-at-last-known-submission-id) user-data re-sync.
+- Solved / attempted / unattempted classification (`data/classify.ts`).
+- Popup cache restoration on open (`peekCachedState()` / `PEEK_CACHED_STATE`) — no network
+  call, populates stats/rating distribution/handle instantly from whatever's already cached.
+- Sync locking/busy state (`util/exclusiveTask.ts`) so overlapping syncs can't corrupt the
+  busy-button state or run concurrently.
+- Friendly, plain-language sync error messages (invalid handle / rate-limited / network /
+  generic), styled as a distinct error state, while the full technical error is still always
+  logged via `console.error`.
+- Starting a new Sync/Force-refresh immediately clears the previous sync's stats/rating
+  distribution/random result/in-memory data, so a failed sync can never leave a previous
+  user's results visible or queryable.
+
+**Filtering, statistics, and selection (`query/getProblems.ts` and friends):**
+- Rating filtering (`minRating`/`maxRating`).
+- Multi-status filtering (a single status or a list of acceptable statuses).
+- Tag filtering (AND semantics).
+- Problem statistics (total/solved/attempted/unattempted) and success rate
+  (`solved/(solved+attempted)`, `null` — not `NaN` — on 0/0).
+- Rating distribution using discrete 100-point Codeforces rating levels (800 through 3500)
+  plus a separate "Unrated" count — replacing an earlier, coarser 14-bucket range design.
+- Random problem selection, and filtered random problem selection built on the same
+  `getProblems()` filters as the "Count problems" query (no duplicated logic).
+
+**Popup UI:**
+- A tag selector: the existing manual comma-separated input plus a clickable dropdown showing
+  "Recent tags" (persisted in `localStorage`) and "All tags" (derived live from the loaded
+  problem set, never hard-coded). Manual typing and the dropdown share one source of truth.
+- A full visual redesign: branded header, six clearly separated panels (Sync / Problem stats /
+  Rating distribution / Filters / Random problem), a cohesive slate + blue palette as CSS
+  custom properties, consistent buttons/inputs/chips, real empty states, and an accessible-
+  contrast pass on text/background colors.
+- An original logo (an ascending four-bar "rating progression" mark) used as both the popup
+  header mark and the 16/48/128px extension icons — deliberately not the Codeforces logo and
+  not derived from any third-party/stock icon (an earlier attempt to use a downloaded Icons8
+  icon was declined for licensing/trademark reasons).
+- Several targeted UX fixes: the "Count problems" result now scrolls into view after running
+  (it renders above the button that triggers it); the tags input truncates overflowing text
+  instead of visually overflowing its bounds; clicking into the manual tags input no longer
+  closes the open tag menu; a previously-shown random result is invalidated whenever the
+  filters or underlying synced data change, so it can never look current when it isn't.
+
+**Known limitation (documented, not investigated):** the tracked Codeforces problemset (used
+for all classification/filtering/statistics here) does not necessarily equal a user's
+profile-wide solved count as shown on codeforces.com. Observed, not root-caused — see
+`PROJECT_STATUS.md`.
+
+**Tests performed:** `npm run typecheck` (pass), `npm test` (**142/142 pass**).
+
+---
+
 ## Session: Display rating distribution in popup
 
 **Type:** Feature (UI wiring only), narrowly scoped.

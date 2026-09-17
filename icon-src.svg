@@ -1,11 +1,13 @@
 <!--
-  CF Companion mark — an original monogram, not the Codeforces logo.
+  CF Companion mark — an original geometric design, not the Codeforces logo
+  and not derived from any third-party icon.
 
-  Dark rounded-square badge (matches the popup's "ink" color token) holding a
-  two-tone "CF" built entirely from primitive shapes (a dashed circle for
-  the C, three rects for the F) rather than <text>, so it renders identically
-  everywhere regardless of installed fonts and stays crisp at any size,
-  down to a 16px toolbar icon.
+  Four ascending bars in a light-to-dark blue ramp on a dark rounded-square
+  badge, representing rating tiers/problem-difficulty progression — the
+  core idea behind this tool (climb from easier to harder problems).
+  Built entirely from primitive rects (no text, no traced artwork), so it
+  renders identically everywhere and stays legible from a 16px toolbar icon
+  up to the popup header.
 
   This is the single source of truth for both the extension icons
   (public/icons/icon{16,48,128}.png, regenerated from this file) and the
@@ -13,9 +15,8 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <rect width="128" height="128" rx="24" fill="#1e293b"/>
-  <circle cx="38" cy="64" r="28" fill="none" stroke="#bfdbfe" stroke-width="16"
-          stroke-dasharray="139 37" transform="rotate(37 38 64)"/>
-  <rect x="66" y="34" width="15" height="60" fill="#2563eb"/>
-  <rect x="66" y="34" width="38" height="15" fill="#2563eb"/>
-  <rect x="66" y="59" width="29" height="15" fill="#2563eb"/>
+  <rect x="20" y="76" width="17" height="28" rx="4" fill="#93c5fd"/>
+  <rect x="44" y="60" width="17" height="44" rx="4" fill="#3b82f6"/>
+  <rect x="68" y="44" width="17" height="60" rx="4" fill="#1d4ed8"/>
+  <rect x="92" y="26" width="17" height="78" rx="4" fill="#1e3a8a"/>
 </svg>

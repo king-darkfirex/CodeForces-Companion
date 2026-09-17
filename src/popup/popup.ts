@@ -386,6 +386,10 @@ function runRangeQuery() {
           .join("\n") +
         (matches.length > 15 ? `\n… and ${matches.length - 15} more` : "")
     );
+    // The result prints into #output, which sits above the "Count problems
+    // in range" button that triggers it — scroll it into view so the user
+    // sees the result immediately instead of having to scroll up for it.
+    output.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
     const e = err as { name?: string; message?: string };
     print(`Unexpected error running query: [${e?.name ?? "Error"}] ${e?.message ?? String(err)}`);

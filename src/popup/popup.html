@@ -2,22 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Codeforces Companion</title>
+    <title>CF Companion</title>
     <style>
       :root {
-        --ink: #1f2937;
-        --ink-muted: #6b7280;
+        --ink: #1e293b;
+        --ink-muted: #475569;
+        --placeholder-ink: #94a3b8;
         --surface: #ffffff;
         --bg: #f1f5f9;
         --border: #e2e8f0;
-        --accent: #38bdf8;
-        --accent-dark: #0369a1;
-        --accent-dark-hover: #075985;
-        --accent-soft-bg: #e0f2fe;
-        --accent-soft-border: #bae6fd;
+        --accent: #2563eb;
+        --accent-dark: #1d4ed8;
+        --accent-dark-hover: #1e40af;
+        --accent-soft-bg: #eff6ff;
+        --accent-soft-border: #bfdbfe;
         --success: #15803d;
-        --warning: #b45309;
-        --neutral: #64748b;
+        --warning: #92400e;
         --radius: 10px;
         --radius-sm: 7px;
       }
@@ -53,17 +53,10 @@
 
       .brand-mark {
         flex: 0 0 auto;
+        display: block;
         width: 30px;
         height: 30px;
         border-radius: 8px;
-        background: var(--ink);
-        color: var(--accent);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 12px;
-        letter-spacing: 0.01em;
       }
 
       .app-header h1 {
@@ -117,14 +110,14 @@
       }
 
       input::placeholder {
-        color: #9ca3af;
+        color: var(--placeholder-ink);
       }
 
       input:focus,
       select:focus {
         outline: none;
         border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
       }
 
       select {
@@ -284,7 +277,7 @@
       }
 
       .stat-cell--unattempted .stat-value {
-        color: var(--neutral);
+        color: var(--ink-muted);
       }
 
       .stat-label {
@@ -361,7 +354,7 @@
       }
 
       .rating-bar-fill.is-unrated {
-        background: var(--neutral);
+        background: var(--ink-muted);
       }
 
       .rating-bar-count {
@@ -401,7 +394,7 @@
 
       .tag-chip-empty {
         font-size: 11px;
-        color: #9ca3af;
+        color: var(--ink-muted);
       }
 
       .tag-chip {
@@ -456,9 +449,24 @@
   <body>
     <div class="app">
       <header class="app-header">
-        <div class="brand-mark" aria-hidden="true">CF</div>
+        <svg class="brand-mark" viewBox="0 0 128 128" aria-hidden="true">
+          <rect width="128" height="128" rx="24" fill="#1e293b" />
+          <circle
+            cx="38"
+            cy="64"
+            r="28"
+            fill="none"
+            stroke="#bfdbfe"
+            stroke-width="16"
+            stroke-dasharray="139 37"
+            transform="rotate(37 38 64)"
+          />
+          <rect x="66" y="34" width="15" height="60" fill="#2563eb" />
+          <rect x="66" y="34" width="38" height="15" fill="#2563eb" />
+          <rect x="66" y="59" width="29" height="15" fill="#2563eb" />
+        </svg>
         <div>
-          <h1>Codeforces Companion</h1>
+          <h1>CF Companion</h1>
           <p class="tagline">Smarter practice from your solving history</p>
         </div>
       </header>

@@ -1,5 +1,21 @@
+<!--
+  CF Companion mark — an original monogram, not the Codeforces logo.
+
+  Dark rounded-square badge (matches the popup's "ink" color token) holding a
+  two-tone "CF" built entirely from primitive shapes (a dashed circle for
+  the C, three rects for the F) rather than <text>, so it renders identically
+  everywhere regardless of installed fonts and stays crisp at any size,
+  down to a 16px toolbar icon.
+
+  This is the single source of truth for both the extension icons
+  (public/icons/icon{16,48,128}.png, regenerated from this file) and the
+  inline <svg class="brand-mark"> in src/popup/popup.html.
+-->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="24" fill="#1F2937"/>
-  <text x="64" y="80" font-family="Arial, Helvetica, sans-serif" font-weight="700"
-        font-size="52" fill="#38BDF8" text-anchor="middle">CF</text>
+  <rect width="128" height="128" rx="24" fill="#1e293b"/>
+  <circle cx="38" cy="64" r="28" fill="none" stroke="#bfdbfe" stroke-width="16"
+          stroke-dasharray="139 37" transform="rotate(37 38 64)"/>
+  <rect x="66" y="34" width="15" height="60" fill="#2563eb"/>
+  <rect x="66" y="34" width="38" height="15" fill="#2563eb"/>
+  <rect x="66" y="59" width="29" height="15" fill="#2563eb"/>
 </svg>

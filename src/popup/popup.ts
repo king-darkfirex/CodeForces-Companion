@@ -4,7 +4,7 @@
 declare const chrome: any;
 
 import { Problem } from "../types/problem";
-import { StatusMap } from "../types/status";
+import { ProblemStatus, StatusMap } from "../types/status";
 import {
   ExtensionRequest,
   ExtensionResponse,
@@ -19,10 +19,11 @@ import {
   getProblemStats,
   getSuccessRate,
   getRatingDistribution,
-  RATING_DISTRIBUTION_LABELS,
+  RATING_LEVELS,
+  RatingDistributionLabel,
 } from "../query/getProblems";
 import { getRandomProblemByFilter } from "../query/getRandomProblemByFilter";
-import { statusFilterFromSelection, StatusSelectValue } from "./statusSelect";
+import { STATUS_OPTIONS, statusSummaryLabel } from "./statusSelect";
 import { parseTagsInput } from "./tagsInput";
 import { collectAllTags, toggleTagInInput, addRecentTags, isOutsideTagMenu } from "./tagMenu";
 import { formatRandomProblemDisplay } from "./randomProblemDisplay";
@@ -82,19 +83,19 @@ function setBusy(busy: boolean) {
 
 /**
  * The only place that reads `getProblemStats()` and writes it to the DOM —
- * so the statistics numbers are never computed more than once. Called after
- * every successful sync, whether that sync came from a fresh fetch or from
- * cache (`syncAll` doesn't branch differently between the two, so this
- * naturally covers both). Builds a small stat grid + success-rate bar;
- * `getProblemStats`/`getSuccessRate` themselves are untouched.
+ * so the statistics numbers are never computed more than once. Builds a
+ * small stat grid + success-rate bar into whichever container it's given;
+ * `getProblemStats`/`getSuccessRate` themselves are untouched. Used for both
+ * the "Overall" stats (`#stats`, unfiltered) and the "Filtered" stats
+ * (`#filteredStats`, over `getProblems()`'s output) — same rendering code,
+ * just a different `problems` array and target container.
  */
-function renderStats(problems: Problem[], statusMap: StatusMap) {
-  const statsEl = $<HTMLDivElement>("stats");
+function renderStatsInto(container: HTMLDivElement, problems: Problem[], statusMap: StatusMap) {
   const stats = getProblemStats(problems, statusMap);
   const successRate = getSuccessRate(stats);
   const successRatePercent = successRate === null ? null : Math.round(successRate * 1000) / 10;
 
-  statsEl.textContent = "";
+  container.textContent = "";
 
   const grid = document.createElement("div");
   grid.className = "stat-grid";
@@ -116,7 +117,7 @@ function renderStats(problems: Problem[], statusMap: StatusMap) {
     cell.append(valueEl, labelEl);
     grid.appendChild(cell);
   }
-  statsEl.appendChild(grid);
+  container.appendChild(grid);
 
   const successRateEl = document.createElement("div");
   successRateEl.className = "success-rate";
@@ -134,26 +135,47 @@ function renderStats(problems: Problem[], statusMap: StatusMap) {
   fill.style.width = `${successRatePercent ?? 0}%`;
   track.appendChild(fill);
   successRateEl.append(row, track);
-  statsEl.appendChild(successRateEl);
+  container.appendChild(successRateEl);
+}
+
+/** Renders the "Overall" stats (unfiltered — the complete synced dataset) into `#stats`. */
+function renderStats(problems: Problem[], statusMap: StatusMap) {
+  renderStatsInto($<HTMLDivElement>("stats"), problems, statusMap);
 }
 
 /**
  * The only place that reads `getRatingDistribution()` and writes it to the
- * DOM, mirroring `renderStats` above. Does not use `statusMap` at all, since
- * `getRatingDistribution` is purely a function of each problem's rating.
- * Renders one bar per label, its width scaled relative to whichever label
- * has the highest count; `getRatingDistribution`/`RATING_DISTRIBUTION_LABELS`
- * themselves are untouched.
+ * DOM, mirroring `renderStatsInto` above. Does not use `statusMap` at all,
+ * since `getRatingDistribution` is purely a function of each problem's
+ * rating; `getRatingDistribution` itself is untouched — this only changes
+ * which of its labels get displayed. Only the 100-point levels within
+ * [minRating, maxRating] are shown, and "Unrated" is never shown: `problems`
+ * is expected to already be the *filtered* set (via `getProblems()`), and
+ * this popup always supplies a numeric rating range (see
+ * `readCurrentFilters()`), so a filtered set can never contain an unrated
+ * problem in the first place.
  */
-function renderRatingDistribution(problems: Problem[]) {
+function renderRatingDistribution(problems: Problem[], minRating: number, maxRating: number) {
   const distributionEl = $<HTMLDivElement>("ratingDistribution");
   const distribution = getRatingDistribution(problems);
-  const maxCount = Math.max(0, ...RATING_DISTRIBUTION_LABELS.map((label) => distribution[label]));
+  const labels: RatingDistributionLabel[] = RATING_LEVELS.filter(
+    (level) => level >= minRating && level <= maxRating
+  ).map((level): RatingDistributionLabel => `${level}`);
+  const maxCount = Math.max(0, ...labels.map((label) => distribution[label]));
 
   distributionEl.textContent = "";
+
+  if (labels.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "No rating levels in the selected range.";
+    distributionEl.appendChild(empty);
+    return;
+  }
+
   const list = document.createElement("div");
   list.className = "rating-bars";
-  for (const label of RATING_DISTRIBUTION_LABELS) {
+  for (const label of labels) {
     const count = distribution[label];
     const row = document.createElement("div");
     row.className = "rating-bar-row";
@@ -165,7 +187,7 @@ function renderRatingDistribution(problems: Problem[]) {
     const track = document.createElement("div");
     track.className = "rating-bar-track";
     const fill = document.createElement("div");
-    fill.className = "rating-bar-fill" + (label === "Unrated" ? " is-unrated" : "");
+    fill.className = "rating-bar-fill";
     fill.style.width = maxCount === 0 ? "0%" : `${(count / maxCount) * 100}%`;
     track.appendChild(fill);
 
@@ -180,32 +202,31 @@ function renderRatingDistribution(problems: Problem[]) {
 }
 
 const STATS_EMPTY_MESSAGE = "Sync your handle to see problem counts.";
+const FILTERED_STATS_EMPTY_MESSAGE = "Sync your handle to see problem counts.";
 const RATING_DISTRIBUTION_EMPTY_MESSAGE = "Sync to see how your problems break down by rating.";
+
+function resetEmptyState(container: HTMLDivElement, message: string): void {
+  container.textContent = "";
+  const empty = document.createElement("p");
+  empty.className = "empty-state";
+  empty.textContent = message;
+  container.appendChild(empty);
+}
 
 /**
  * Resets every sync-dependent display back to its pre-sync appearance —
- * stats, rating distribution, the random result, and the in-memory
- * problem/status data itself. Called right when a new Sync/Force-refresh
- * starts, so a previous user's results never remain visible (or queryable
- * via Count/Random) through a sync that then fails, e.g. on an invalid
- * handle.
+ * overall stats, filtered stats, rating distribution, the random result,
+ * and the in-memory problem/status data itself. Called right when a new
+ * Sync/Force-refresh starts, so a previous user's results never remain
+ * visible (or queryable via Count/Random) through a sync that then fails,
+ * e.g. on an invalid handle.
  */
 function clearSyncedDisplays(): void {
   lastState = null;
 
-  const statsEl = $<HTMLDivElement>("stats");
-  statsEl.textContent = "";
-  const statsEmpty = document.createElement("p");
-  statsEmpty.className = "empty-state";
-  statsEmpty.textContent = STATS_EMPTY_MESSAGE;
-  statsEl.appendChild(statsEmpty);
-
-  const distributionEl = $<HTMLDivElement>("ratingDistribution");
-  distributionEl.textContent = "";
-  const distributionEmpty = document.createElement("p");
-  distributionEmpty.className = "empty-state";
-  distributionEmpty.textContent = RATING_DISTRIBUTION_EMPTY_MESSAGE;
-  distributionEl.appendChild(distributionEmpty);
+  resetEmptyState($<HTMLDivElement>("stats"), STATS_EMPTY_MESSAGE);
+  resetEmptyState($<HTMLDivElement>("filteredStats"), FILTERED_STATS_EMPTY_MESSAGE);
+  resetEmptyState($<HTMLDivElement>("ratingDistribution"), RATING_DISTRIBUTION_EMPTY_MESSAGE);
 
   invalidateRandomResult();
   if (!tagMenu.hidden) renderTagMenu();
@@ -221,6 +242,55 @@ interface SyncedState {
 }
 
 let lastState: SyncedState | null = null;
+
+interface CurrentFilters {
+  minRating: number;
+  maxRating: number;
+  status: ProblemStatus[];
+  tags: string[];
+}
+
+/**
+ * Reads the rating range, status, and tags controls into a `getProblems()`-
+ * compatible filter object. The single source of truth for how the popup
+ * turns its filter controls into a `ProblemFilters` value — `runRangeQuery`,
+ * `showRandomProblem`, and `renderFilteredResults` all call this instead of
+ * each re-reading/re-parsing the same three inputs. `status` is always the
+ * exact array of currently-checked statuses (never `undefined`): zero
+ * checked correctly matches nothing and all three checked correctly matches
+ * everything, both purely as a consequence of `getProblems()`'s existing
+ * "problem's status must be included in this list" semantics — no special
+ * casing needed here for either end of that range.
+ */
+function readCurrentFilters(): CurrentFilters {
+  const minRating = Number($<HTMLInputElement>("minRating").value);
+  const maxRating = Number($<HTMLInputElement>("maxRating").value);
+  const tags = parseTagsInput($<HTMLInputElement>("tags").value);
+  return { minRating, maxRating, status: Array.from(selectedStatuses), tags };
+}
+
+/**
+ * Renders the "Filtered" stats block and the rating-distribution panel from
+ * whatever currently matches the rating/status/tags controls — the same
+ * pipeline `runRangeQuery`/`showRandomProblem` use, reusing the existing
+ * `getProblems()` engine rather than duplicating its filtering logic:
+ *
+ *   selected filters -> getProblems() -> filtered problems
+ *     -> renderStatsInto()          (getProblemStats()/getSuccessRate())
+ *     -> renderRatingDistribution() (getRatingDistribution())
+ *
+ * No-op when nothing's synced yet — the pre-sync empty states set by
+ * `clearSyncedDisplays()` are left alone. Called after every successful
+ * sync/cache-restore, and again whenever any filter control changes, so
+ * these two displays always reflect the currently selected filters.
+ */
+function renderFilteredResults(): void {
+  if (!lastState) return;
+  const { minRating, maxRating, status, tags } = readCurrentFilters();
+  const filtered = getProblems(lastState.problems, lastState.statusMap, { minRating, maxRating, status, tags });
+  renderStatsInto($<HTMLDivElement>("filteredStats"), filtered, lastState.statusMap);
+  renderRatingDistribution(filtered, minRating, maxRating);
+}
 
 // --- Tag menu (clickable tag selector) ------------------------------------
 //
@@ -279,6 +349,7 @@ function renderTagChips(container: HTMLDivElement, tags: string[], selected: Set
       saveRecentTags(recentTags);
       renderTagMenu();
       invalidateRandomResult();
+      renderFilteredResults();
     });
     container.appendChild(chip);
   }
@@ -301,6 +372,7 @@ tagMenuToggle.addEventListener("click", () => setTagMenuOpen(!!tagMenu.hidden));
 tagsInput.addEventListener("input", () => {
   if (!tagMenu.hidden) renderTagMenu();
   invalidateRandomResult();
+  renderFilteredResults();
 });
 document.addEventListener("click", (e) => {
   if (!tagMenu.hidden && isOutsideTagMenu(e.target, tagMenu, tagMenuToggle, tagsInput)) {
@@ -308,12 +380,74 @@ document.addEventListener("click", (e) => {
   }
 });
 
-// The rating range and status controls are the other inputs that feed
-// `showRandomProblem` (alongside tags, handled above) — changing any of
-// them makes a previously-shown random result stale in the same way.
-$<HTMLInputElement>("minRating").addEventListener("input", invalidateRandomResult);
-$<HTMLInputElement>("maxRating").addEventListener("input", invalidateRandomResult);
-$<HTMLSelectElement>("status").addEventListener("change", invalidateRandomResult);
+// --- Status selector (multi-select) ---------------------------------------
+//
+// Mirrors the tag selector's interaction style: a toggle button opens a
+// dropdown of clickable chips (one per ProblemStatus), each toggled
+// independently. Unlike tags there's no free-text input to keep in sync
+// with — `selectedStatuses` is the only source of truth. getProblems()
+// already handles both ends of the range correctly with no special-casing
+// needed here: zero selected -> status: [] -> matches nothing; all three
+// selected -> status: [Solved, Attempted, Unattempted] -> matches everything
+// (every problem's status is one of exactly these three).
+const statusMenuToggle = $<HTMLButtonElement>("statusMenuToggle");
+const statusMenu = $<HTMLDivElement>("statusMenu");
+const statusChipList = $<HTMLDivElement>("statusChipList");
+
+// Default: all three checked, i.e. "All statuses" — no status filter in effect.
+let selectedStatuses = new Set<ProblemStatus>(STATUS_OPTIONS.map((option) => option.value));
+
+function updateStatusToggleLabel(): void {
+  statusMenuToggle.textContent = `${statusSummaryLabel(selectedStatuses)} ▾`;
+}
+
+function renderStatusMenu(): void {
+  statusChipList.textContent = "";
+  for (const option of STATUS_OPTIONS) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "tag-chip" + (selectedStatuses.has(option.value) ? " selected" : "");
+    chip.textContent = option.label;
+    chip.addEventListener("click", () => {
+      if (selectedStatuses.has(option.value)) {
+        selectedStatuses.delete(option.value);
+      } else {
+        selectedStatuses.add(option.value);
+      }
+      renderStatusMenu();
+      updateStatusToggleLabel();
+      handleFilterControlChange();
+    });
+    statusChipList.appendChild(chip);
+  }
+}
+
+function setStatusMenuOpen(open: boolean): void {
+  statusMenu.hidden = !open;
+  if (open) renderStatusMenu();
+}
+
+updateStatusToggleLabel();
+renderStatusMenu();
+
+statusMenuToggle.addEventListener("click", () => setStatusMenuOpen(!!statusMenu.hidden));
+document.addEventListener("click", (e) => {
+  if (!statusMenu.hidden && isOutsideTagMenu(e.target, statusMenu, statusMenuToggle, statusMenuToggle)) {
+    setStatusMenuOpen(false);
+  }
+});
+
+// The rating range control also feeds `renderFilteredResults()` (the
+// "Filtered" stats block + the rating-distribution panel) and
+// `showRandomProblem` (via invalidateRandomResult) — changing it makes both
+// the filtered displays and a previously-shown random result stale in the
+// same way. (The status menu's chip clicks call this directly, above.)
+function handleFilterControlChange(): void {
+  invalidateRandomResult();
+  renderFilteredResults();
+}
+$<HTMLInputElement>("minRating").addEventListener("input", handleFilterControlChange);
+$<HTMLInputElement>("maxRating").addEventListener("input", handleFilterControlChange);
 
 // Ensures only one sync can be in flight at a time, and — critically — that
 // the "busy" state is always cleared afterward (success, handled failure,
@@ -355,7 +489,7 @@ async function syncAll(force: boolean): Promise<void> {
 
   lastState = { problems, statusMap };
   renderStats(problems, statusMap);
-  renderRatingDistribution(problems);
+  renderFilteredResults();
   if (!tagMenu.hidden) renderTagMenu();
   invalidateRandomResult();
 
@@ -419,11 +553,7 @@ function runRangeQuery() {
       print("Sync first, then run a query.");
       return;
     }
-    const min = Number($<HTMLInputElement>("minRating").value);
-    const max = Number($<HTMLInputElement>("maxRating").value);
-    const statusValue = $<HTMLSelectElement>("status").value as StatusSelectValue;
-    const status = statusFilterFromSelection(statusValue);
-    const tags = parseTagsInput($<HTMLInputElement>("tags").value);
+    const { minRating: min, maxRating: max, status, tags } = readCurrentFilters();
     if (tags.length > 0) {
       recentTags = addRecentTags(recentTags, tags, RECENT_TAGS_MAX);
       saveRecentTags(recentTags);
@@ -436,7 +566,7 @@ function runRangeQuery() {
       tags,
     });
 
-    const statusLabel = status ?? "any status";
+    const statusLabel = statusSummaryLabel(new Set(status));
     print(
       `${matches.length} problem(s) rated ${min}–${max} (${statusLabel}).\n\n` +
         matches
@@ -472,11 +602,7 @@ function showRandomProblem() {
       return;
     }
 
-    const min = Number($<HTMLInputElement>("minRating").value);
-    const max = Number($<HTMLInputElement>("maxRating").value);
-    const statusValue = $<HTMLSelectElement>("status").value as StatusSelectValue;
-    const status = statusFilterFromSelection(statusValue); // "Any status" -> undefined -> no restriction
-    const tags = parseTagsInput($<HTMLInputElement>("tags").value);
+    const { minRating: min, maxRating: max, status, tags } = readCurrentFilters();
     if (tags.length > 0) {
       recentTags = addRecentTags(recentTags, tags, RECENT_TAGS_MAX);
       saveRecentTags(recentTags);
@@ -531,7 +657,7 @@ async function restoreFromCache(): Promise<void> {
     $<HTMLInputElement>("handle").value = profile.handle;
     lastState = { problems, statusMap };
     renderStats(problems, statusMap);
-    renderRatingDistribution(problems);
+    renderFilteredResults();
     if (!tagMenu.hidden) renderTagMenu();
     invalidateRandomResult();
 

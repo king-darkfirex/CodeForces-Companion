@@ -259,6 +259,17 @@
       }
 
       /* Problem stats */
+      .stats-subheading {
+        margin: 0 0 6px;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--ink-muted);
+      }
+
+      #stats {
+        margin-bottom: 12px;
+      }
+
       .stat-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -376,6 +387,12 @@
         font-variant-numeric: tabular-nums;
       }
 
+      /* Status selector — reuses .tag-menu/.tag-chip-list/.tag-chip from the tag selector below */
+      .status-toggle {
+        width: 100%;
+        text-align: left;
+      }
+
       /* Tag selector */
       .tag-menu {
         border: 1px solid var(--border);
@@ -487,7 +504,12 @@
 
       <section class="panel">
         <h2>Problem stats</h2>
+        <p class="stats-subheading">Overall</p>
         <div id="stats">
+          <p class="empty-state">Sync your handle to see problem counts.</p>
+        </div>
+        <p class="stats-subheading">Filtered</p>
+        <div id="filteredStats">
           <p class="empty-state">Sync your handle to see problem counts.</p>
         </div>
       </section>
@@ -504,20 +526,18 @@
         <div class="field-row">
           <div>
             <label for="minRating">Min rating</label>
-            <input id="minRating" type="number" value="1200" />
+            <input id="minRating" type="number" value="800" min="800" max="3500" step="100" />
           </div>
           <div>
             <label for="maxRating">Max rating</label>
-            <input id="maxRating" type="number" value="1400" />
+            <input id="maxRating" type="number" value="3500" min="800" max="3500" step="100" />
           </div>
         </div>
-        <label for="status">Status</label>
-        <select id="status">
-          <option value="all">All</option>
-          <option value="solved">Solved</option>
-          <option value="attempted">Attempted</option>
-          <option value="unattempted" selected>Unattempted</option>
-        </select>
+        <label for="statusMenuToggle">Status</label>
+        <button id="statusMenuToggle" type="button" class="btn btn-ghost status-toggle">All statuses ▾</button>
+        <div id="statusMenu" class="tag-menu" hidden>
+          <div id="statusChipList" class="tag-chip-list"></div>
+        </div>
         <label for="tags">Tags (comma-separated)</label>
         <div class="tags-row">
           <input id="tags" type="text" placeholder="e.g. dp, greedy" />

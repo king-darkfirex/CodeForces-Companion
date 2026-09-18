@@ -3,3 +3,6 @@ dist/
 dist_zip/
 .vite/
 *.log
+CHANGELOG.md
+CLAUDE.md
+PROJECT_STATUS.md
